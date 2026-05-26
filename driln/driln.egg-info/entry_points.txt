@@ -1,0 +1,2 @@
+[console_scripts]
+driln = driln.cli:app
