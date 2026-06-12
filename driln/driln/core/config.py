@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     app_name: str = "driln"
     debug: bool = False
     log_level: str = "INFO"
+    api_key: SecretStr | None = None
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
     # ── Database ────────────────────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./driln.db"
@@ -41,6 +48,7 @@ class Settings(BaseSettings):
     ai_model: str = "gpt-4o"
     ai_api_key: SecretStr | None = None
     ai_base_url: str | None = None
+    ai_provider_module: str | None = None  # e.g. "my_custom_ai" — auto-imported at startup
     ai_temperature: float = 0.2
     ai_max_tokens: int = 4096
 

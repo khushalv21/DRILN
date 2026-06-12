@@ -10,8 +10,9 @@ future manual actions; workflow rules *trigger* automated scan expansion.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from driln.schemas.intelligence import TechProfile
 from driln.workflow.decisions import WorkflowAction
@@ -120,10 +121,12 @@ WORKFLOW_RULES: list[WorkflowRule] = [
         actions=[
             WorkflowAction(
                 action_type="notify",
+                tool_name=None,
+                tool_config=None,
                 priority="medium",
                 reason=(
-                    f"Large attack surface detected — consider running targeted "
-                    f"nmap against the top hosts for deeper port analysis"
+                    "Large attack surface detected — consider running targeted "
+                    "nmap against the top hosts for deeper port analysis"
                 ),
             ),
         ],
@@ -151,6 +154,8 @@ WORKFLOW_RULES: list[WorkflowRule] = [
         actions=[
             WorkflowAction(
                 action_type="notify",
+                tool_name=None,
+                tool_config=None,
                 priority="critical",
                 reason="Exposed .git repository detected — source code and secrets may be extractable",
             ),

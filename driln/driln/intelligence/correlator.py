@@ -74,6 +74,7 @@ class FindingCorrelator:
                     finding_ids=finding_ids,
                     relationship="same_service",
                     summary=f"Multiple tools found issues on {key}: {', '.join(tools)}",
+                    combined_risk=0.0,
                 ))
         return groups
 
@@ -122,6 +123,7 @@ class FindingCorrelator:
                         f"Service info + vulnerability on {key}: "
                         f"{', '.join(high_titles)}"
                     ),
+                    combined_risk=0.0,
                 ))
         return groups
 
@@ -158,5 +160,6 @@ class FindingCorrelator:
                     finding_ids=ids,
                     relationship="tech_overlap",
                     summary=f"{len(grouped)} findings related to {tech}",
+                    combined_risk=0.0,
                 ))
         return groups

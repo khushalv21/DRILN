@@ -15,29 +15,103 @@ Usage::
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+import re
 
 import typer
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.text import Text
-from rich import box
+from rich.theme import Theme
 
 from driln import __version__
 
+# Red/grey theme — overrides Typer's default cyan
+_THEME = Theme({
+    "info": "purple",
+    "warning": "yellow",
+    "error": "bold purple",
+    "option": "bold dim",
+    "switch": "bold dim",
+    "negative_option": "bold dim",
+    "negative_switch": "bold dim",
+    "metavar": "bold purple",
+    "prompt.choices": "purple",
+})
+console = Console(theme=_THEME)
+
+# ── ASCII logo (bare `driln` only) ──────────────────────────────
+
+_LOGO = """
+[bold purple]    ██████╗ ██████╗ ██╗██╗     ███╗   ██╗
+    ██╔══██╗██╔══██╗██║██║     ████╗  ██║
+    ██║  ██║██████╔╝██║██║     ██╔██╗ ██║
+    ██║  ██║██╔══██╗██║██║     ██║╚██╗██║
+    ██████╔╝██║  ██║██║███████╗██║ ╚████║
+    ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═══╝[/bold purple]
+"""
+_TAGLINE = "[dim purple]    Find it before they do.[/dim purple]"
+
+
+def _show_banner(ctx: typer.Context) -> None:
+    """Show the ASCII logo when `driln` is invoked with no subcommand."""
+    if ctx.invoked_subcommand is None:
+        console.print(_LOGO)
+        console.print(_TAGLINE)
+        console.print()
+        console.print("  [bold]Commands:[/bold]")
+        console.print("    [purple]scan[/purple]      Run a penetration test scan")
+        console.print("    [purple]setup[/purple]     Download and install pentesting tools")
+        console.print("    [purple]report[/purple]    Generate a report for a completed scan")
+        console.print("    [purple]tools[/purple]     Manage pentesting tools")
+        console.print("    [purple]intel[/purple]     Scan intelligence and recommendations")
+        console.print("    [purple]serve[/purple]     Start the API server")
+        console.print("    [purple]version[/purple]   Show version")
+        console.print()
+        console.print("  [dim]Run[/dim] [bold]driln <command> --help[/bold] [dim]for details.[/dim]")
+        console.print()
+
+
 app = typer.Typer(
     name="driln",
-    help="🔱 Driln — Intelligent automated pentesting engine",
-    no_args_is_help=True,
+    help="Driln — Intelligent automated pentesting engine",
+    invoke_without_command=True,
+    no_args_is_help=False,
+    callback=_show_banner,
 )
-
-console = Console()
 
 # ── UI helpers ───────────────────────────────────────────────────
 
-_BRAND = "[bold magenta]🔱 Driln[/bold magenta]"
+_TARGET_RE = __import__("re").compile(
+    r"^[a-zA-Z0-9][a-zA-Z0-9.\-_:/]{0,510}[a-zA-Z0-9/]$"
+)
+
+
+def _validate_target(target: str, allow_local: bool = False) -> str:
+    """Validate and sanitize a scan target.
+
+    Blocks shell metacharacters, path traversal, and other injection vectors.
+    Allows domains, IPs, URLs, and CIDR notation.
+    """
+    from driln.core.validation import validate_target_format, TargetValidationError
+    try:
+        target = validate_target_format(target)
+    except TargetValidationError as e:
+        console.print(f"  [bold purple]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    if not allow_local:
+        from driln.api.validators import resolve_and_check_local
+        if resolve_and_check_local(target):
+            console.print("[purple]  Error: Target resolves to a private IP.[/purple]")
+            console.print("[yellow]  Scanning internal networks is disabled by default.[/yellow]")
+            console.print("[yellow]  Pass --allow-local to override.[/yellow]")
+            raise typer.Exit(1)
+
+    return target
+
 _SEV_COLORS = {
     "critical": "bold red",
     "high": "red",
@@ -77,16 +151,16 @@ def _sev_badge(sev: str) -> str:
 
 
 def _header(title: str, subtitle: str = "") -> Panel:
-    """Render a branded header panel."""
-    content = f"{_BRAND}  [bold]{title}[/bold]"
+    """Render a clean header panel."""
+    content = f"[bold]{title}[/bold]"
     if subtitle:
         content += f"\n[dim]{subtitle}[/dim]"
-    return Panel(content, box=box.HEAVY, style="magenta", expand=False)
+    return Panel(content, box=box.ROUNDED, style="purple", expand=False)
 
 
 # ── Sub-commands ─────────────────────────────────────────────────
 
-tools_app = typer.Typer(help="🛠  Manage pentesting tools")
+tools_app = typer.Typer(help="Manage pentesting tools")
 app.add_typer(tools_app, name="tools")
 
 
@@ -103,8 +177,8 @@ def serve(
     import uvicorn
 
     console.print(_header("API Server", f"{host}:{port}"))
-    console.print(f"  [dim]Swagger UI →[/dim] [cyan]http://{host}:{port}/docs[/cyan]")
-    console.print(f"  [dim]Health     →[/dim] [cyan]http://{host}:{port}/health[/cyan]\n")
+    console.print(f"  [dim]Swagger UI →[/dim] [purple]http://{host}:{port}/docs[/purple]")
+    console.print(f"  [dim]Health     →[/dim] [purple]http://{host}:{port}/health[/purple]\n")
     uvicorn.run(
         "driln.main:app",
         host=host,
@@ -121,39 +195,56 @@ def serve(
 def scan(
     target: str = typer.Argument(..., help="Target host or domain"),
     scan_type: str = typer.Option("full", "--type", "-t", help="Scan type: recon, vuln, full"),
-    tools: Optional[str] = typer.Option(None, "--tools", help="Comma-separated tool list override"),
+    tools: str | None = typer.Option(None, "--tools", help="Comma-separated tool list override"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI analysis"),
+    allow_local: bool = typer.Option(False, "--allow-local", help="Allow scanning of internal/private IP addresses"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to JSON config file for tools"),
 ):
     """Run a penetration test scan against a target."""
-    asyncio.run(_run_scan(target, scan_type, tools, no_ai))
+    target = _validate_target(target, allow_local)
+    
+    config_dict = None
+    if config:
+        import json
+        from pathlib import Path
+        config_path = Path(config)
+        if not config_path.exists():
+            console.print(f"[purple]Error: Config file {config} not found[/purple]")
+            raise typer.Exit(1)
+        try:
+            config_dict = json.loads(config_path.read_text())
+        except Exception as e:
+            console.print(f"[purple]Error parsing config file: {e}[/purple]")
+            raise typer.Exit(1)
+
+    asyncio.run(_run_scan(target, scan_type, tools, no_ai, config_dict))
 
 
-async def _run_scan(target: str, scan_type: str, tools: str | None, no_ai: bool):
+async def _run_scan(target: str, scan_type: str, tools: str | None, no_ai: bool, config_dict: dict | None = None) -> None:
+    import logging
+
     from driln.core.logging import setup_logging
     from driln.db.engine import close_db, init_db
+    from driln.engine.pipeline import get_pipeline
     from driln.engine.scanner import ScanEngine
     from driln.reports.generator import ReportGenerator
     from driln.tools.registry import init_registry
 
     setup_logging()
+
+    # Suppress ALL log output during CLI scan — must happen BEFORE init calls
+    root_logger = logging.getLogger()
+    original_level = root_logger.level
+    root_logger.setLevel(logging.CRITICAL)
+
     await init_db()
     init_registry()
 
     tool_list = [t.strip() for t in tools.split(",")] if tools else None
 
-    # Header
-    console.print()
-    console.print(_header("Scan", target))
+    # Resolve the tool pipeline so we can pre-populate progress
+    pipeline_tools = tool_list or get_pipeline(scan_type)
 
-    info_table = Table(show_header=False, box=None, padding=(0, 2))
-    info_table.add_column(style="dim")
-    info_table.add_column(style="cyan")
-    info_table.add_row("Target", target)
-    info_table.add_row("Type", scan_type)
-    if tool_list:
-        info_table.add_row("Tools", ", ".join(tool_list))
-    info_table.add_row("AI", "[red]Disabled[/red]" if no_ai else "[green]Enabled[/green]")
-    console.print(info_table)
     console.print()
 
     engine = ScanEngine()
@@ -161,58 +252,97 @@ async def _run_scan(target: str, scan_type: str, tools: str | None, no_ai: bool)
         target=target,
         scan_type=scan_type,
         tools=tool_list,
+        config=config_dict,
     )
-    console.print(f"  [dim]Scan ID:[/dim] [yellow]{scan_id}[/yellow]\n")
 
-    # Run scan with progress
+    # Per-tool progress display
     with Progress(
         SpinnerColumn("dots"),
-        TextColumn("[bold]{task.description}"),
-        BarColumn(bar_width=30),
+        TextColumn("{task.fields[tool_name]:<12}"),
+        BarColumn(bar_width=25),
+        TextColumn("{task.fields[status]}"),
         TimeElapsedColumn(),
         console=console,
-        transient=True,
+        transient=False,
     ) as progress:
-        task = progress.add_task("Running scan pipeline...", total=None)
-        await engine.run_scan(scan_id)
-        progress.update(task, description="[green]Scan complete[/green]")
+        # Pre-create tasks for all tools
+        tool_tasks: dict[str, object] = {}
+        for tn in pipeline_tools:
+            tid = progress.add_task(
+                "",
+                total=1,
+                completed=0,
+                tool_name=f"[bold]{tn}[/bold]",
+                status="[dim]waiting[/dim]",
+            )
+            tool_tasks[tn] = tid
 
-    # Generate report
-    with Progress(
-        SpinnerColumn("dots"),
-        TextColumn("[bold]{task.description}"),
-        console=console,
-        transient=True,
-    ) as progress:
-        task = progress.add_task("Generating report...", total=None)
-        generator = ReportGenerator()
-        result = await generator.generate(
-            scan_id=scan_id,
-            format="markdown",
-            include_ai_summary=not no_ai,
+        def on_start(tool_name: str) -> None:
+            if tool_name in tool_tasks:
+                progress.update(
+                    tool_tasks[tool_name],
+                    status="[purple]scanning...[/purple]",
+                )
+
+        def on_complete(tool_name: str, success: bool, duration: float, findings: int) -> None:
+            if tool_name in tool_tasks:
+                if success:
+                    status = f"[green]done[/green] [dim]{findings} findings[/dim]"
+                elif duration == 0.0 and findings == 0:
+                    status = "[yellow]skipped[/yellow]"
+                else:
+                    status = "[purple]failed[/purple]"
+                progress.update(
+                    tool_tasks[tool_name],
+                    completed=1,
+                    status=status,
+                )
+
+        await engine.run_scan(
+            scan_id,
+            on_tool_start=on_start,
+            on_tool_complete=on_complete,
         )
-        progress.update(task, description="[green]Report ready[/green]")
 
-    # Summary panel
-    summary = Table(show_header=False, box=None, padding=(0, 2))
-    summary.add_column(style="dim")
-    summary.add_column()
-    summary.add_row("Status", "[bold green]✓ Complete[/bold green]")
-    summary.add_row("Report", f"[cyan]{result['filepath']}[/cyan]")
-    summary.add_row("Scan ID", f"[yellow]{scan_id}[/yellow]")
+    # Generate report (silent)
+    generator = ReportGenerator()
+    result = await generator.generate(
+        scan_id=scan_id,
+        format="markdown",
+        include_ai_summary=not no_ai,
+    )
 
-    console.print(Panel(
-        summary,
-        title="[bold green]Scan Finished[/bold green]",
-        border_style="green",
-        box=box.ROUNDED,
-        expand=False,
-    ))
+    # Restore log level
+    root_logger.setLevel(original_level)
+
+    # Count findings by severity from the DB
+    from driln.db.engine import _get_session_factory
+    from driln.db.repos import FindingRepository
+
+    factory = _get_session_factory()
+    async with factory() as session:
+        finding_repo = FindingRepository(session)
+        findings = await finding_repo.list_by_scan(scan_id)
+
+    sev_counts: dict[str, int] = {}
+    for f in findings:
+        sev = f.severity.value if hasattr(f.severity, "value") else f.severity
+        sev_counts[sev] = sev_counts.get(sev, 0) + 1
+
+    total_findings = len(findings)
+    sev_parts = []
+    for sev in ["critical", "high", "medium", "low", "info"]:
+        if sev_counts.get(sev, 0) > 0:
+            color = _SEV_COLORS.get(sev, "white")
+            sev_parts.append(f"[{color}]{sev_counts[sev]} {sev}[/{color}]")
+
+    sev_str = " · ".join(sev_parts) if sev_parts else ""
+
     console.print()
-    console.print(f"  [dim]Next steps:[/dim]")
-    console.print(f"    driln intel summary {scan_id}")
-    console.print(f"    driln intel recommendations {scan_id}")
-    console.print(f"    driln report {scan_id} --format html\n")
+    console.print(f"  [bold green]✓ Scan complete[/bold green] · {total_findings} findings{' · ' + sev_str if sev_str else ''}")
+    console.print(f"  [dim]Report:[/dim] [purple]{result['filepath']}[/purple]")
+    console.print(f"  [dim]Scan ID:[/dim] [yellow]{scan_id}[/yellow]")
+    console.print()
 
     await close_db()
 
@@ -227,10 +357,13 @@ def tools_list():
 
 
 async def _tools_list():
+    import logging
+
     from driln.core.logging import setup_logging
     from driln.tools.registry import init_registry
 
     setup_logging()
+    logging.getLogger().setLevel(logging.CRITICAL)
     registry = init_registry()
     results = await registry.check_all()
 
@@ -238,7 +371,7 @@ async def _tools_list():
     console.print(_header("Tools"))
 
     table = Table(box=box.ROUNDED, show_lines=False, padding=(0, 1))
-    table.add_column("Tool", style="bold cyan", min_width=12)
+    table.add_column("Tool", style="bold purple", min_width=12)
     table.add_column("Binary", style="dim")
     table.add_column("Status", justify="center", min_width=14)
     table.add_column("Path", style="dim", max_width=50)
@@ -249,7 +382,7 @@ async def _tools_list():
             status = "[bold green]● Installed[/bold green]"
             installed_count += 1
         else:
-            status = "[bold red]○ Missing[/bold red]"
+            status = "[bold purple]○ Missing[/bold purple]"
         table.add_row(
             info["name"],
             info["binary"],
@@ -270,10 +403,13 @@ def tools_check():
 
 
 async def _tools_check():
+    import logging
+
     from driln.core.logging import setup_logging
     from driln.tools.registry import init_registry
 
     setup_logging()
+    logging.getLogger().setLevel(logging.CRITICAL)
     registry = init_registry()
     results = await registry.check_all()
 
@@ -281,18 +417,18 @@ async def _tools_check():
     all_ok = True
     for info in results.values():
         if info["installed"]:
-            console.print(f"  [bold green]✓[/bold green] [cyan]{info['name']}[/cyan] — {info['path']}")
+            console.print(f"  [bold green]✓[/bold green] [purple]{info['name']}[/purple] — {info['path']}")
         else:
-            console.print(f"  [bold red]✗[/bold red] [cyan]{info['name']}[/cyan] — not found in PATH")
+            console.print(f"  [bold purple]✗[/bold purple] [purple]{info['name']}[/purple] — not found in PATH")
             all_ok = False
 
     if all_ok:
-        console.print(f"\n  [bold green]All tools installed![/bold green]\n")
+        console.print("\n  [bold green]All tools installed![/bold green]\n")
     else:
-        console.print(f"\n  [yellow]Some tools missing. Install with:[/yellow]")
-        console.print(f"    [dim]brew install nmap subfinder[/dim]")
-        console.print(f"    [dim]go install github.com/projectdiscovery/httpx/cmd/httpx@latest[/dim]")
-        console.print(f"    [dim]go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest[/dim]\n")
+        console.print("\n  [yellow]Some tools missing. Install with:[/yellow]")
+        console.print("    [dim]brew install nmap subfinder[/dim]")
+        console.print("    [dim]go install github.com/projectdiscovery/httpx/cmd/httpx@latest[/dim]")
+        console.print("    [dim]go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest[/dim]\n")
 
 
 # ── Report ───────────────────────────────────────────────────────
@@ -309,11 +445,14 @@ def report(
 
 
 async def _generate_report(scan_id: str, format: str, no_ai: bool):
+    import logging
+
     from driln.core.logging import setup_logging
     from driln.db.engine import close_db, init_db
     from driln.reports.generator import ReportGenerator
 
     setup_logging()
+    logging.getLogger().setLevel(logging.CRITICAL)
     await init_db()
 
     with Progress(
@@ -334,8 +473,8 @@ async def _generate_report(scan_id: str, format: str, no_ai: bool):
 
     console.print()
     console.print(Panel(
-        f"[dim]Format:[/dim] [cyan]{format}[/cyan]\n"
-        f"[dim]File:  [/dim] [cyan]{result['filepath']}[/cyan]",
+        f"[dim]Format:[/dim] [purple]{format}[/purple]\n"
+        f"[dim]File:  [/dim] [purple]{result['filepath']}[/purple]",
         title="[bold green]Report Generated[/bold green]",
         border_style="green",
         box=box.ROUNDED,
@@ -348,7 +487,7 @@ async def _generate_report(scan_id: str, format: str, no_ai: bool):
 
 # ── Intelligence commands ─────────────────────────────────────────
 
-intel_app = typer.Typer(help="🧠 Scan intelligence and recommendations")
+intel_app = typer.Typer(help="Scan intelligence and recommendations")
 app.add_typer(intel_app, name="intel")
 
 
@@ -359,9 +498,8 @@ def intel_summary(
     """Show the full intelligence report for a scan."""
     async def _run() -> None:
         from driln.core.logging import setup_logging
-        from driln.db.engine import init_db
+        from driln.db.engine import _get_session_factory, init_db
         from driln.db.repos import FindingRepository, ScanRepository
-        from driln.db.engine import _get_session_factory
         from driln.intelligence.context import ScanContext
         from driln.intelligence.service import IntelligenceService
 
@@ -375,7 +513,7 @@ def intel_summary(
 
             scan = await scan_repo.get(scan_id)
             if scan is None:
-                console.print(f"\n  [bold red]✗[/bold red] Scan [yellow]{scan_id}[/yellow] not found\n")
+                console.print(f"\n  [bold purple]✗[/bold purple] Scan [yellow]{scan_id}[/yellow] not found\n")
                 raise typer.Exit(1)
 
             # Build context
@@ -442,7 +580,7 @@ def intel_summary(
             # Tech profile
             if intel.tech_profile.technologies:
                 tech_table = Table(box=box.SIMPLE, show_lines=False, padding=(0, 1))
-                tech_table.add_column("Technology", style="bold cyan")
+                tech_table.add_column("Technology", style="bold purple")
                 tech_table.add_column("Version", style="dim")
                 tech_table.add_column("Category")
                 tech_table.add_column("Sources", style="dim")
@@ -456,7 +594,7 @@ def intel_summary(
                 console.print(Panel(
                     tech_table,
                     title=f"[bold]Technologies ({len(intel.tech_profile.technologies)})[/bold]",
-                    border_style="cyan",
+                    border_style="purple",
                     box=box.ROUNDED,
                 ))
 
@@ -464,7 +602,7 @@ def intel_summary(
             if intel.correlation_groups:
                 console.print(f"\n  [bold]Correlation Groups ({len(intel.correlation_groups)}):[/bold]")
                 for g in intel.correlation_groups:
-                    rel_color = {"same_service": "cyan", "attack_chain": "red", "tech_overlap": "yellow"}.get(g.relationship, "white")
+                    rel_color = {"same_service": "dim", "attack_chain": "red", "tech_overlap": "yellow"}.get(g.relationship, "white")
                     console.print(f"    [{rel_color}]●[/{rel_color}] [{rel_color}]{g.relationship}[/{rel_color}]  {g.summary}  [dim]({len(g.finding_ids)} findings)[/dim]")
 
             # Recommendations
@@ -473,7 +611,7 @@ def intel_summary(
                 rec_table.add_column("#", style="dim", width=3)
                 rec_table.add_column("Pri", width=10)
                 rec_table.add_column("Action", min_width=30)
-                rec_table.add_column("Tool", width=12, style="cyan")
+                rec_table.add_column("Tool", width=12, style="purple")
 
                 for idx, r in enumerate(intel.recommendations, 1):
                     pri_color = _SEV_COLORS.get(r.priority, "white")
@@ -503,7 +641,7 @@ def intel_recommendations(
     """List recommendations for a scan."""
     async def _run() -> None:
         from driln.core.logging import setup_logging
-        from driln.db.engine import init_db, _get_session_factory
+        from driln.db.engine import _get_session_factory, init_db
         from driln.db.repos import RecommendationRepository
 
         setup_logging()
@@ -525,7 +663,7 @@ def intel_recommendations(
             table.add_column("#", style="dim", width=3)
             table.add_column("Priority", width=10)
             table.add_column("Action", min_width=35)
-            table.add_column("Tool", width=14, style="cyan")
+            table.add_column("Tool", width=14, style="purple")
             table.add_column("Source", width=10, style="dim")
             table.add_column("Status", width=12)
 
@@ -533,7 +671,7 @@ def intel_recommendations(
                 pri_color = _SEV_COLORS.get(r.priority, "white")
                 status = (
                     "[bold green]✓ Accepted[/bold green]" if r.accepted is True
-                    else "[bold red]✗ Dismissed[/bold red]" if r.accepted is False
+                    else "[bold purple]✗ Dismissed[/bold purple]" if r.accepted is False
                     else "[dim]⏳ Pending[/dim]"
                 )
                 table.add_row(
@@ -558,7 +696,7 @@ def intel_tech(
     """Show the detected technology profile for a scan."""
     async def _run() -> None:
         from driln.core.logging import setup_logging
-        from driln.db.engine import init_db, _get_session_factory
+        from driln.db.engine import _get_session_factory, init_db
         from driln.db.repos import FindingRepository, ScanRepository
         from driln.intelligence.context import ScanContext
         from driln.intelligence.tech import TechAggregator
@@ -573,7 +711,7 @@ def intel_tech(
 
             scan = await scan_repo.get(scan_id)
             if scan is None:
-                console.print(f"\n  [bold red]✗[/bold red] Scan [yellow]{scan_id}[/yellow] not found\n")
+                console.print(f"\n  [bold purple]✗[/bold purple] Scan [yellow]{scan_id}[/yellow] not found\n")
                 raise typer.Exit(1)
 
             context = ScanContext(
@@ -602,7 +740,7 @@ def intel_tech(
                 return
 
             table = Table(box=box.ROUNDED, show_lines=False, padding=(0, 1))
-            table.add_column("Technology", style="bold cyan", min_width=20)
+            table.add_column("Technology", style="bold purple", min_width=20)
             table.add_column("Version", width=12)
             table.add_column("Category", width=12)
             table.add_column("Confidence", width=12)
@@ -635,7 +773,7 @@ def intel_tech(
                 console.print(Panel(
                     "\n".join(badges),
                     title="[bold]Stack Summary[/bold]",
-                    border_style="cyan",
+                    border_style="purple",
                     box=box.ROUNDED,
                     expand=False,
                 ))
@@ -650,15 +788,74 @@ def intel_tech(
 @app.command()
 def version():
     """Show the Driln version."""
-    console.print(Panel(
-        f"[bold magenta]🔱 Driln[/bold magenta] v{__version__}\n"
-        f"[dim]Intelligent automated pentesting engine[/dim]",
-        box=box.ROUNDED,
-        expand=False,
-    ))
+    console.print(f"driln v{__version__}")
 
 
-# ── Entry point ──────────────────────────────────────────────────
+# ── Setup ────────────────────────────────────────────────────────
+
+
+@app.command()
+def setup():
+    """Download and install pentesting tools (subfinder, httpx, nuclei)."""
+    import logging
+
+    from driln.core.logging import setup_logging
+    from driln.tools.installer import BIN_DIR, check_nmap, install_all
+
+    setup_logging()
+    logging.getLogger().setLevel(logging.CRITICAL)
+
+    console.print()
+    console.print(_header("Setup", "Installing pentesting tools"))
+    console.print()
+
+    with Progress(
+        SpinnerColumn("dots"),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(bar_width=30),
+        TimeElapsedColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task("Downloading tools...", total=None)
+        results = install_all()
+        progress.update(task, description="[green]Done[/green]")
+
+    console.print()
+    table = Table(box=box.ROUNDED, show_lines=False, padding=(0, 1))
+    table.add_column("Tool", style="bold purple", min_width=12)
+    table.add_column("Status", justify="center", min_width=14)
+
+    for name, ok in results.items():
+        if ok:
+            status = "[bold green]● Installed[/bold green]"
+        else:
+            status = "[bold purple]✗ Failed[/bold purple]"
+        table.add_row(name, status)
+
+    # Check nmap separately (system package, not downloadable)
+    nmap_info = check_nmap()
+    if nmap_info["installed"]:
+        table.add_row("nmap", "[bold green]● Installed[/bold green]")
+    else:
+        table.add_row("nmap", "[bold yellow]⚠ Not found[/bold yellow]")
+
+    console.print(table)
+
+    ok_count = sum(1 for v in results.values() if v)
+    total = len(results)
+    color = "green" if ok_count == total else "yellow" if ok_count > 0 else "red"
+    console.print(f"\n  [{color}]{ok_count}/{total} tools downloaded[/{color}]")
+
+    # nmap install hint
+    if not nmap_info["installed"] and nmap_info["hint"]:
+        console.print("\n  [yellow]nmap not found.[/yellow] Install it with:")
+        console.print(f"    [bold]{nmap_info['hint']}[/bold]")
+
+    # PATH hint
+    console.print(f"\n  [dim]Binary dir: {BIN_DIR}[/dim]")
+    console.print('  [dim]Add to PATH: export PATH="$HOME/.driln/bin:$PATH"[/dim]\n')
+
 
 if __name__ == "__main__":
     app()

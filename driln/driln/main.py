@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     # Initialize tool registry
     from driln.tools.registry import init_registry
 
-    registry = init_registry()
+    init_registry()
 
     # Ensure output directory exists
     from driln.core.config import get_settings
@@ -63,10 +63,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ─────────────────────────────────────────────────
+    from driln.core.config import get_settings
+    settings = get_settings()
+
+    # ── CORS — restrict to local use only ──────────────────────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

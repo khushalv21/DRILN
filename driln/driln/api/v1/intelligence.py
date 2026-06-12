@@ -13,6 +13,7 @@ from driln.api.deps import (
     get_recommendation_repo,
     get_scan_repo,
 )
+from driln.api.validators import validate_uuid
 from driln.db.repos import FindingRepository, RecommendationRepository, ScanRepository
 from driln.intelligence.context import ScanContext
 from driln.intelligence.service import IntelligenceService
@@ -28,6 +29,7 @@ async def get_intelligence(
     finding_repo: FindingRepository = Depends(get_finding_repo),
 ):
     """Run the full intelligence pipeline on a completed scan."""
+    validate_uuid(scan_id, "scan_id")
     scan = await scan_repo.get(scan_id)
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -66,6 +68,7 @@ async def list_recommendations(
     rec_repo: RecommendationRepository = Depends(get_recommendation_repo),
 ):
     """List all recommendations for a scan."""
+    validate_uuid(scan_id, "scan_id")
     scan = await scan_repo.get(scan_id)
     if scan is None:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -95,6 +98,13 @@ async def accept_recommendation(
     rec_repo: RecommendationRepository = Depends(get_recommendation_repo),
 ):
     """Accept a recommendation."""
+    validate_uuid(scan_id, "scan_id")
+    validate_uuid(rec_id, "rec_id")
+    # Verify the recommendation belongs to this scan
+    recs = await rec_repo.list_by_scan(scan_id)
+    if not any(r.id == rec_id for r in recs):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Recommendation not found for this scan")
     await rec_repo.accept(rec_id)
     return {"status": "accepted", "recommendation_id": rec_id}
 
@@ -106,5 +116,12 @@ async def dismiss_recommendation(
     rec_repo: RecommendationRepository = Depends(get_recommendation_repo),
 ):
     """Dismiss a recommendation."""
+    validate_uuid(scan_id, "scan_id")
+    validate_uuid(rec_id, "rec_id")
+    # Verify the recommendation belongs to this scan
+    recs = await rec_repo.list_by_scan(scan_id)
+    if not any(r.id == rec_id for r in recs):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Recommendation not found for this scan")
     await rec_repo.dismiss(rec_id)
     return {"status": "dismissed", "recommendation_id": rec_id}

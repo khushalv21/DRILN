@@ -13,8 +13,11 @@ from driln.tools.base import BaseTool, ToolResult
 
 class SubfinderTool(BaseTool):
     name = "subfinder"
-    description = "Fast passive subdomain enumeration"
+    description = "Fast passive subdomain enumeration tool"
     binary = "subfinder"
+    allowed_extra_args = frozenset({
+        "-v", "-nW", "-nC", "-d", "-t", "-exclude-sources"
+    })
 
     def build_command(self, target: str, options: dict[str, Any]) -> list[str]:
         """Build subfinder command.

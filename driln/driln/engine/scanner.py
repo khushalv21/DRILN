@@ -16,8 +16,8 @@ from both the API (as a background task) and the CLI.
 
 from __future__ import annotations
 
-import tempfile
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -79,12 +79,20 @@ class ScanEngine:
             logger.info("scan_created", scan_id=scan.id, target=target, scan_type=scan_type)
             return scan.id
 
-    async def run_scan(self, scan_id: str) -> None:
+    async def run_scan(
+        self,
+        scan_id: str,
+        on_tool_start: Callable[[str], None] | None = None,
+        on_tool_complete: Callable[[str, bool, float, int], None] | None = None,
+    ) -> None:
         """Execute a scan by running all tools in the pipeline.
 
-        This is the main entry point for scan execution.  It should be
-        called as a background task (FastAPI ``BackgroundTasks``) or
-        directly from the CLI.
+        Args:
+            scan_id: UUID of the scan.
+            on_tool_start: Optional callback fired before each tool runs.
+                Signature: ``(tool_name) -> None``.
+            on_tool_complete: Optional callback fired after each tool finishes.
+                Signature: ``(tool_name, success, duration, finding_count) -> None``.
         """
         settings = get_settings()
         registry = get_registry()
@@ -112,7 +120,7 @@ class ScanEngine:
             await scan_repo.update_status(
                 scan_id,
                 ScanStatus.RUNNING,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
             )
             await session.commit()
 
@@ -129,8 +137,13 @@ class ScanEngine:
                 scan_type=scan.scan_type,
             )
 
-            # Create temp dir for inter-tool data passing
-            output_dir = settings.scan_output_dir / scan_id
+            # Create output dir with human-readable name
+            from driln.core.paths import make_output_dir
+            output_dir = make_output_dir(
+                settings.scan_output_dir,
+                scan.target,
+                scan.started_at,
+            )
             output_dir.mkdir(parents=True, exist_ok=True)
 
             for tool_name in tool_names:
@@ -138,12 +151,20 @@ class ScanEngine:
                     tool = registry.get(tool_name)
                 except Exception as exc:
                     logger.warning("tool_skip", tool=tool_name, reason=str(exc))
+                    if on_tool_start:
+                        on_tool_start(tool_name)
+                    if on_tool_complete:
+                        on_tool_complete(tool_name, False, 0.0, 0)
                     continue
 
                 # Check installation
                 installed, _ = await tool.check_installed()
                 if not installed:
                     logger.warning("tool_not_installed", tool=tool_name)
+                    if on_tool_start:
+                        on_tool_start(tool_name)
+                    if on_tool_complete:
+                        on_tool_complete(tool_name, False, 0.0, 0)
                     continue
 
                 # Build per-tool options
@@ -160,6 +181,8 @@ class ScanEngine:
                 await session.commit()
 
                 # Execute
+                if on_tool_start:
+                    on_tool_start(tool_name)
                 try:
                     result = await tool.run(
                         scan.target,
@@ -196,6 +219,14 @@ class ScanEngine:
 
                     await session.commit()
 
+                    if on_tool_complete:
+                        on_tool_complete(
+                            tool_name,
+                            result.success,
+                            result.duration or 0.0,
+                            len(result.findings) if result.findings else 0,
+                        )
+
                 except ToolError as exc:
                     logger.error("tool_failed", tool=tool_name, error=str(exc))
                     await run_repo.complete(
@@ -207,10 +238,12 @@ class ScanEngine:
                         status=ScanStatus.FAILED,
                     )
                     await session.commit()
+                    if on_tool_complete:
+                        on_tool_complete(tool_name, False, 0.0, 0)
                     # Continue with other tools — don't abort the whole scan
                     continue
 
-                except Exception as exc:
+                except Exception:
                     logger.exception("tool_unexpected_error", tool=tool_name)
                     failed = True
                     break
@@ -275,7 +308,7 @@ class ScanEngine:
             await scan_repo.update_status(
                 scan_id,
                 final_status,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
             await session.commit()
 
@@ -334,7 +367,7 @@ class ScanEngine:
             await repo.update_status(
                 scan_id,
                 ScanStatus.CANCELLED,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
             await session.commit()
             logger.info("scan_cancelled", scan_id=scan_id)

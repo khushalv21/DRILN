@@ -16,6 +16,10 @@ class NmapTool(BaseTool):
     name = "nmap"
     description = "Network exploration and security auditing"
     binary = "nmap"
+    allowed_extra_args = frozenset({
+        "-T3", "-T4", "-T5", "--top-ports", "--min-rate", "--max-rate",
+        "-O", "-A", "-v", "-vv", "-Pn", "-n"
+    })
 
     def build_command(self, target: str, options: dict[str, Any]) -> list[str]:
         """Build nmap command.
@@ -33,6 +37,9 @@ class NmapTool(BaseTool):
 
         if options.get("scripts", True):
             cmd.append("-sC")
+
+        # Skip ping discovery to prevent silent failures on ping-dropping hosts
+        cmd.append("-Pn")
 
         ports = options.get("ports")
         if ports:

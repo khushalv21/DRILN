@@ -17,6 +17,9 @@ class NucleiTool(BaseTool):
     name = "nuclei"
     description = "Template-based vulnerability scanner"
     binary = "nuclei"
+    allowed_extra_args = frozenset({
+        "-v", "-debug", "-as", "-stats", "-vnc", "-no-color", "-H"
+    })
 
     def build_command(self, target: str, options: dict[str, Any]) -> list[str]:
         """Build nuclei command.

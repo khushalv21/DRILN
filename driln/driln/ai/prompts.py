@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-
 SYSTEM_PROMPT = """You are Driln AI, an expert cybersecurity analyst and penetration tester.
 
 Your role is to analyze scan results from various security tools and provide:
@@ -43,7 +42,7 @@ def build_analysis_prompt(scan_data: dict[str, Any]) -> str:
     scan_type = scan_data.get("scan_type", "unknown")
 
     sections = [
-        f"## Scan Analysis Request\n",
+        "## Scan Analysis Request\n",
         f"**Target:** {target}",
         f"**Scan Type:** {scan_type}",
         "",

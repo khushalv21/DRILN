@@ -70,7 +70,7 @@ class BaseAIProvider(ABC):
 
     async def structured_analyze(
         self, scan_data: dict[str, Any]
-    ) -> "AIStructuredAnalysis":
+    ) -> AIStructuredAnalysis:
         """Analyze scan results and return structured JSON output.
 
         Default implementation calls :meth:`analyze_scan` and wraps the

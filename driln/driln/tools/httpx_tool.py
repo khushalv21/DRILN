@@ -14,8 +14,11 @@ from driln.tools.base import BaseTool, ToolResult
 
 class HttpxTool(BaseTool):
     name = "httpx"
-    description = "Fast HTTP probing and technology detection"
+    description = "Fast and multi-purpose HTTP toolkit"
     binary = "httpx"
+    allowed_extra_args = frozenset({
+        "-v", "-debug", "-stats", "-no-color", "-random-agent", "-H"
+    })
 
     def build_command(self, target: str, options: dict[str, Any]) -> list[str]:
         """Build httpx command.

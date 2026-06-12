@@ -6,14 +6,13 @@ that business-layer code never imports ``sqlalchemy`` directly.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from driln.db.models import Finding, Recommendation, Report, Scan, ScanStatus, Severity, ToolRun
-
 
 # ── Scan Repository ─────────────────────────────────────────────
 
@@ -78,7 +77,7 @@ class ToolRunRepository:
             tool_name=tool_name,
             command=command,
             status=ScanStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
         self._s.add(run)
         await self._s.flush()
@@ -102,7 +101,7 @@ class ToolRunRepository:
         run.exit_code = exit_code
         run.duration_seconds = duration_seconds
         run.status = status
-        run.completed_at = datetime.now(timezone.utc)
+        run.completed_at = datetime.now(UTC)
         await self._s.flush()
 
     async def list_by_scan(self, scan_id: str) -> Sequence[ToolRun]:

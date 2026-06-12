@@ -10,7 +10,13 @@ from pydantic import BaseModel, Field
 class ScanCreate(BaseModel):
     """Request body for creating a new scan."""
 
-    target: str = Field(..., min_length=1, max_length=512, description="Target host or domain")
+    target: str = Field(
+        ...,
+        min_length=1,
+        max_length=512,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9.\-_:/]{0,510}[a-zA-Z0-9/]$",
+        description="Target host or domain",
+    )
     scan_type: str = Field(
         "full",
         pattern=r"^(recon|vuln|full)$",
@@ -20,7 +26,33 @@ class ScanCreate(BaseModel):
         None,
         description="Override default pipeline with specific tools",
     )
+    allow_local: bool = Field(
+        False,
+        description="Allow scanning of internal/private IP addresses",
+    )
     config: dict | None = Field(None, description="Additional per-tool options")
+
+    @__import__("pydantic").field_validator("tools")
+    @classmethod
+    def validate_tools(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        allowed = {"nmap", "subfinder", "httpx", "nuclei"}
+        for t in v:
+            if t not in allowed:
+                raise ValueError(f"Unknown tool: '{t}'. Allowed: {', '.join(sorted(allowed))}")
+        return v
+
+    @__import__("pydantic").field_validator("config")
+    @classmethod
+    def block_extra_args(cls, v: dict | None) -> dict | None:
+        """Block extra_args in API config to prevent command injection."""
+        if v is None:
+            return v
+        for tool_opts in v.values():
+            if isinstance(tool_opts, dict) and "extra_args" in tool_opts:
+                raise ValueError("extra_args is not allowed via the API")
+        return v
 
 
 class ScanStatus(BaseModel):

@@ -63,7 +63,7 @@ async def execute_subprocess(
                 process.communicate(input=stdin_data),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Kill the process on timeout
             try:
                 process.kill()
@@ -72,8 +72,13 @@ async def execute_subprocess(
                 pass
             raise TimeoutError(f"Process timed out after {timeout}s: {cmd[0]}")
 
-        stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
-        stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+        stdout_raw = stdout_bytes.decode("utf-8", errors="replace").strip()
+        stderr_raw = stderr_bytes.decode("utf-8", errors="replace").strip()
+
+        # Cap output size to prevent memory exhaustion (10 MB)
+        max_output = 10 * 1024 * 1024
+        stdout = stdout_raw[:max_output]
+        stderr = stderr_raw[:max_output]
         exit_code = process.returncode or 0
 
         logger.debug(

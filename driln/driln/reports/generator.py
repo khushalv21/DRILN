@@ -6,7 +6,7 @@ reports using Jinja2 templates.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,6 @@ from driln.core.exceptions import ScanError
 from driln.db.engine import _get_session_factory
 from driln.db.repos import (
     FindingRepository,
-    RecommendationRepository,
     ReportRepository,
     ScanRepository,
     ToolRunRepository,
@@ -107,7 +106,7 @@ class ReportGenerator:
             # Severity counts
             severity_counts: dict[str, int] = {}
             for f in findings_dicts:
-                sev = f["severity"]
+                sev = str(f["severity"])
                 severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
             # Intelligence analysis
@@ -157,6 +156,17 @@ class ReportGenerator:
             template_name = f"{'markdown' if format == 'markdown' else 'html'}.{'md' if format == 'markdown' else 'html'}.j2"
             template = self._env.get_template(template_name)
 
+            # Compute scan duration
+            scan_duration = None
+            if scan.started_at and scan.completed_at:
+                delta = scan.completed_at - scan.started_at
+                total_secs = int(delta.total_seconds())
+                if total_secs >= 60:
+                    mins, secs = divmod(total_secs, 60)
+                    scan_duration = f"{mins} minute{'s' if mins != 1 else ''} {secs} seconds"
+                else:
+                    scan_duration = f"{total_secs} seconds"
+
             content = template.render(
                 scan_id=scan.id,
                 target=scan.target,
@@ -164,13 +174,14 @@ class ReportGenerator:
                 status=scan.status.value if hasattr(scan.status, "value") else scan.status,
                 started_at=scan.started_at,
                 completed_at=scan.completed_at,
+                scan_duration=scan_duration,
                 tool_runs=tool_run_dicts,
                 findings=findings_dicts,
                 severity_counts=severity_counts,
                 ai_summary=ai_summary,
-                generated_at=datetime.now(timezone.utc),
+                generated_at=datetime.now(UTC),
                 total_findings=len(findings_dicts),
-                # Intelligence data (Phase 2)
+                # Intelligence data
                 intelligence=intelligence,
                 tech_profile=intelligence.tech_profile if intelligence else None,
                 risk_summary=intelligence.risk_summary if intelligence else None,
@@ -182,11 +193,16 @@ class ReportGenerator:
                 correlations=intelligence.correlation_groups if intelligence else [],
             )
 
-            # Write to disk
-            output_dir = settings.scan_output_dir / scan_id
+            # Write to disk with human-readable names
+            from driln.core.paths import make_output_dir, make_report_filename
+            output_dir = make_output_dir(
+                settings.scan_output_dir,
+                scan.target,
+                scan.started_at,
+            )
             output_dir.mkdir(parents=True, exist_ok=True)
-            ext = "md" if format == "markdown" else "html"
-            filepath = output_dir / f"report.{ext}"
+            report_name = make_report_filename(scan.target, format)
+            filepath = output_dir / report_name
             filepath.write_text(content, encoding="utf-8")
 
             # Persist report record

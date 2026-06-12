@@ -83,6 +83,7 @@ class BaseTool(ABC):
     description: str = ""
     binary: str = ""
     version_flag: str = "--version"
+    allowed_extra_args: frozenset[str] = frozenset()
 
     # ── Public API ───────────────────────────────────────────────
 
@@ -127,6 +128,16 @@ class BaseTool(ABC):
             ToolExecutionError: Non-zero exit with no parsed output.
         """
         opts = options or {}
+
+        # Validate extra_args to prevent argument injection
+        extra_args = opts.get("extra_args", [])
+        if extra_args:
+            for arg in extra_args:
+                if arg.startswith("-") and arg not in self.allowed_extra_args:
+                    raise ToolExecutionError(
+                        f"Disallowed extra argument '{arg}' for tool '{self.name}'. "
+                        f"Allowed flags: {', '.join(self.allowed_extra_args) if self.allowed_extra_args else 'None'}"
+                    )
 
         # 1. Check installation
         installed, path = await self.check_installed()

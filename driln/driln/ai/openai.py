@@ -40,12 +40,13 @@ class OpenAIProvider(BaseAIProvider):
         api_key = settings.ai_api_key
         self._api_key = api_key.get_secret_value() if api_key else ""
 
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             timeout=httpx.Timeout(120.0, connect=10.0),
         )
 
@@ -113,6 +114,9 @@ class OpenAIProvider(BaseAIProvider):
 
     async def analyze_scan(self, scan_data: dict[str, Any]) -> str:
         """Analyze scan results using the system prompt + analysis template."""
+        if not self._api_key:
+            return "_AI analysis unavailable — set DRILN_AI_API_KEY to enable._"
+
         user_prompt = build_analysis_prompt(scan_data)
 
         response = await self.complete([
