@@ -64,4 +64,10 @@ In our stress tests, we pushed **500 concurrent scans** simultaneously through t
 
 The entire 500-scan payload processed through the engine and intelligence pipeline in just **3.78 seconds**!
 
+## 🗺️ Upcoming Features
+
+We are actively building the next generation of Driln. Here is what's coming:
+
+- **Terminal UI (TUI) & Dockerization:** Moving from a CLI to an interactive TUI, with official Docker images and PyPI publication.
+- **AI Containment & Adversarial Testing:** Proving efficacy against hardened targets using strict LLM governance to ensure hallucination-free exploitation paths and aggressive false-positive filtering.
 For more detailed technical information, see the [Architecture Guide](ARCHITECTURE.md) and the [Testing Guide](TESTING.md).
