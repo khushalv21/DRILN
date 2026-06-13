@@ -1,10 +1,10 @@
-# Driln
+# DRILN
 
 **Driln** is an automated penetration testing engine. It orchestrates industry-standard offensive security tools and uses an intelligence layer (with optional AI integration) to deduplicate findings, score risks, and generate clear security reports.
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Install Prerequisites
 Driln relies on a few external tools to scan targets. Make sure you have them installed:
@@ -44,7 +44,7 @@ driln report <scan-id> --format html
 
 ---
 
-## 🛠 Features
+## Features
 
 - **Automated Tool Chaining**: Seamlessly pipes outputs from `subfinder` to `httpx` to `nuclei`.
 - **Intelligence Layer**: Automatically merges duplicate findings across different tools and assigns a 0-100 risk score.
@@ -53,7 +53,7 @@ driln report <scan-id> --format html
 
 - **Actionable Advice:** Gives you exact steps to fix issues, not just a list of problems.
 
-## 🚀 Extreme Performance & Concurrency
+## Extreme Performance & Concurrency
 
 Driln is built to scale. Using asynchronous processing (`asyncio`) and robust connection pooling (`aiosqlite`), Driln handles extreme loads without breaking a sweat.
 
@@ -64,7 +64,7 @@ In our stress tests, we pushed **500 concurrent scans** simultaneously through t
 
 The entire 500-scan payload processed through the engine and intelligence pipeline in just **3.78 seconds**!
 
-## 🗺️ Upcoming Features
+## Upcoming Features
 
 We are actively building the next generation of Driln. Here is what's coming:
 
