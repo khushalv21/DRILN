@@ -8,6 +8,7 @@
 ```
 > **Find it before they do.**
 
+[![CI](https://github.com/khushalv21/DRILN/actions/workflows/ci.yml/badge.svg)](https://github.com/khushalv21/DRILN/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](driln/__init__.py)
@@ -43,12 +44,21 @@ go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 
 ### 2. Install Driln
 
-Clone the repository and install the package:
-
 ```bash
+git clone https://github.com/khushalv21/DRILN.git
+cd DRILN
 pip install -e ".[dev]"
 cp .env.example .env
 ```
+
+**Or, skip installing the tools yourself** and run Driln in Docker, which bundles nmap and
+the ProjectDiscovery tools:
+
+```bash
+docker compose up --build
+```
+
+The API is then available at `http://localhost:8000`.
 
 ### 3. Bring Your Own API Key (Optional)
 
