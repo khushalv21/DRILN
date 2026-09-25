@@ -18,6 +18,12 @@ WORKDIR /home/driln/app
 
 ENV PATH="/home/driln/.local/bin:/home/driln/.driln/bin:${PATH}"
 
+# Pre-create the mount points for docker-compose's named volumes, owned by
+# `driln`. A fresh named volume inherits the ownership/content of whatever
+# already exists at its mount path in the image — without this, Docker
+# creates the volume as root-owned and the app can't write its SQLite db.
+RUN mkdir -p data output
+
 COPY --chown=driln:driln pyproject.toml README.md ./
 COPY --chown=driln:driln driln ./driln
 
