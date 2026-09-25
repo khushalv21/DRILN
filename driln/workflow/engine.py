@@ -1,9 +1,19 @@
 """Workflow engine — evaluates rules against scan state.
 
 The engine is called after the intelligence service produces its report.
-It evaluates all workflow rules and returns decisions.  It does **not**
-auto-execute anything (unless ``--auto-expand`` is set) — it only
-produces decisions for the scanner or CLI to act on.
+It evaluates all workflow rules and returns decisions, split into two
+groups via :meth:`WorkflowEngine.get_auto_actions` and
+:meth:`WorkflowEngine.get_pending_actions`:
+
+* Rules with ``requires_approval=False`` are executed immediately by
+  :meth:`~driln.engine.scanner.ScanEngine._execute_workflow_action`, within
+  the same scan run.
+* Rules with ``requires_approval=True`` are persisted as recommendations
+  (see :class:`~driln.db.models.Recommendation`) for the user to accept or
+  dismiss via the existing recommendations API/CLI.
+
+This module itself only evaluates rules and returns decisions — it does not
+execute anything; that's the scanner's job.
 """
 
 from __future__ import annotations

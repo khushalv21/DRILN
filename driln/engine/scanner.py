@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -39,6 +39,11 @@ from driln.intelligence.service import IntelligenceService
 from driln.tools.base import ToolResult
 from driln.tools.registry import get_registry
 from driln.workflow.engine import WorkflowEngine
+
+if TYPE_CHECKING:
+    from driln.core.config import Settings
+    from driln.tools.registry import ToolRegistry
+    from driln.workflow.decisions import WorkflowAction
 
 logger = structlog.get_logger()
 
@@ -297,6 +302,70 @@ class ScanEngine:
                             count=len(decisions),
                             rules=[d.rule_name for d in decisions],
                         )
+
+                        rec_repo = RecommendationRepository(session)
+
+                        # Pending actions need user approval — surface them as
+                        # recommendations (same accept/dismiss flow used elsewhere).
+                        for action in workflow.get_pending_actions(decisions):
+                            await rec_repo.create(
+                                scan_id=scan_id,
+                                priority=action.priority,
+                                category="workflow_expansion",
+                                title=(
+                                    f"Expand scan: run {action.tool_name}"
+                                    if action.tool_name
+                                    else "Review workflow finding"
+                                ),
+                                rationale=action.reason,
+                                source="workflow",
+                                tool_name=action.tool_name,
+                                tool_config=action.tool_config,
+                            )
+
+                        # Auto-approved actions execute immediately, within this
+                        # same scan run, using the same tool registry as the
+                        # main pipeline.
+                        new_findings = False
+                        for action in workflow.get_auto_actions(decisions):
+                            if action.action_type in ("add_tool", "rerun_tool") and action.tool_name:
+                                added = await self._execute_workflow_action(
+                                    action,
+                                    scan_id=scan_id,
+                                    target=scan.target,
+                                    registry=registry,
+                                    settings=settings,
+                                    run_repo=run_repo,
+                                    finding_repo=finding_repo,
+                                    scan_context=scan_context,
+                                    all_results=all_results,
+                                    all_findings=all_findings,
+                                    output_dir=output_dir,
+                                )
+                                new_findings = new_findings or added
+                            await rec_repo.create(
+                                scan_id=scan_id,
+                                priority=action.priority,
+                                category="workflow_expansion",
+                                title=(
+                                    f"Auto-ran {action.tool_name}"
+                                    if action.tool_name
+                                    else "Workflow notification"
+                                ),
+                                rationale=action.reason,
+                                source="workflow_auto",
+                                tool_name=action.tool_name,
+                                tool_config=action.tool_config,
+                            )
+                        await session.commit()
+
+                        # Re-analyze so risk scores/dedup reflect any findings
+                        # the auto-executed actions turned up.
+                        if new_findings:
+                            intelligence = await intel_service.analyze(scan_context)
+                            for fid, score in intelligence.finding_risk_scores.items():
+                                await finding_repo.update_risk_score(fid, score)
+                            await session.commit()
             except Exception as exc:
                 logger.warning("workflow_failed", scan_id=scan_id, error=str(exc))
 
@@ -355,6 +424,89 @@ class ScanEngine:
                     break
 
         return opts
+
+    async def _execute_workflow_action(
+        self,
+        action: WorkflowAction,
+        *,
+        scan_id: str,
+        target: str,
+        registry: ToolRegistry,
+        settings: Settings,
+        run_repo: ToolRunRepository,
+        finding_repo: FindingRepository,
+        scan_context: ScanContext,
+        all_results: list[ToolResult],
+        all_findings: list[dict[str, Any]],
+        output_dir: Path,
+    ) -> bool:
+        """Run a single auto-approved workflow action's tool.
+
+        Mirrors the main pipeline loop in :meth:`run_scan`: resolve the tool,
+        check installation, chain in any relevant prior output, execute, and
+        persist the run and its findings.
+
+        Returns:
+            ``True`` if the tool ran successfully and produced findings.
+        """
+        tool_name = action.tool_name
+        assert tool_name is not None  # narrowed by caller
+
+        try:
+            tool = registry.get(tool_name)
+        except Exception as exc:
+            logger.warning("workflow_action_tool_missing", tool=tool_name, reason=str(exc))
+            return False
+
+        installed, _ = await tool.check_installed()
+        if not installed:
+            logger.warning("workflow_action_tool_not_installed", tool=tool_name)
+            return False
+
+        options = self._chain_outputs(tool_name, dict(action.tool_config or {}), all_results, output_dir)
+
+        cmd_preview = " ".join(tool.build_command(target, options))
+        run = await run_repo.create(scan_id, tool_name, cmd_preview)
+
+        try:
+            result = await tool.run(target, options=options, timeout=settings.scan_timeout)
+        except ToolError as exc:
+            logger.error("workflow_action_failed", tool=tool_name, error=str(exc))
+            await run_repo.complete(
+                run.id,
+                raw_output=str(exc),
+                parsed_output=None,
+                exit_code=-1,
+                duration_seconds=0.0,
+                status=ScanStatus.FAILED,
+            )
+            return False
+
+        all_results.append(result)
+        scan_context.add_tool_result(result)
+
+        await run_repo.complete(
+            run.id,
+            raw_output=result.raw_output[:50000],
+            parsed_output=result.parsed_data,
+            exit_code=result.exit_code,
+            duration_seconds=result.duration,
+            status=ScanStatus.COMPLETED if result.success else ScanStatus.FAILED,
+        )
+
+        if result.findings:
+            finding_dicts = [{"scan_id": scan_id, "tool_run_id": run.id, **f} for f in result.findings]
+            await finding_repo.bulk_create(finding_dicts)
+            all_findings.extend(result.findings)
+
+        logger.info(
+            "workflow_action_executed",
+            scan_id=scan_id,
+            tool=tool_name,
+            success=result.success,
+            findings=len(result.findings) if result.findings else 0,
+        )
+        return bool(result.findings)
 
     async def cancel_scan(self, scan_id: str) -> None:
         """Mark a scan as cancelled."""
