@@ -9,8 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from driln.api.deps import (
+    get_db,
     get_finding_repo,
     get_recommendation_repo,
     get_scan_repo,
@@ -18,7 +20,9 @@ from driln.api.deps import (
 from driln.api.validators import validate_uuid
 from driln.db.repos import FindingRepository, RecommendationRepository, ScanRepository
 from driln.intelligence.context import ScanContext
+from driln.intelligence.diff import compute_scan_diff
 from driln.intelligence.service import IntelligenceService
+from driln.schemas.diff import ScanDiff
 from driln.schemas.intelligence import RecommendationOut, ScanIntelligence
 
 router = APIRouter()
@@ -63,6 +67,20 @@ async def get_intelligence(
     service = IntelligenceService()
     intelligence = await service.analyze(context)
     return intelligence
+
+
+@router.get("/{scan_id}/diff", response_model=ScanDiff)
+async def get_scan_diff(
+    scan_id: str,
+    session: AsyncSession = Depends(get_db),
+) -> ScanDiff:
+    """Compare a scan's findings against the most recent prior completed
+    scan of the same target — new, fixed, and persisted findings."""
+    validate_uuid(scan_id, "scan_id")
+    diff = await compute_scan_diff(session, scan_id)
+    if diff is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return diff
 
 
 @router.get("/{scan_id}/recommendations", response_model=list[RecommendationOut])

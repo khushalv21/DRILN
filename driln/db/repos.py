@@ -41,6 +41,27 @@ class ScanRepository:
         result = await self._s.execute(stmt)
         return result.scalars().all()
 
+    async def get_previous_completed(self, target: str, exclude_scan_id: str) -> Scan | None:
+        """Return the most recently completed scan of the same target.
+
+        Used for scan-to-scan diffing — finds what to compare *exclude_scan_id*
+        against. Ordered by ``completed_at`` so a scan started earlier but
+        finished later still wins, matching "most recent result", not
+        "most recently started".
+        """
+        stmt = (
+            select(Scan)
+            .where(
+                Scan.target == target,
+                Scan.id != exclude_scan_id,
+                Scan.status == ScanStatus.COMPLETED,
+            )
+            .order_by(Scan.completed_at.desc())
+            .limit(1)
+        )
+        result = await self._s.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def update_status(
         self,
         scan_id: str,

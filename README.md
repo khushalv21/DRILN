@@ -20,8 +20,10 @@
 
 - **Automated Tool Chaining**: Seamlessly pipes outputs from `subfinder` to `httpx` to `nmap` and `nuclei`.
 - **Intelligence Layer**: Merges duplicate findings across different tools, correlates related issues, and assigns a 0-100 risk score.
+- **Workflow Expansion**: Detects conditions like an exposed database port or a WordPress install and automatically runs targeted follow-up templates, or surfaces them as recommendations to approve.
+- **Scan Diffing**: Re-scan the same target later and see exactly what's new, what got fixed, and what's unchanged — via `driln intel diff`, the API, or a "Changes Since Last Scan" section in every report.
 - **AI-Powered Summaries (BYOK)**: Bring your own API key — generates executive summaries and remediation steps using LLMs. Works without a key too.
-- **CLI & REST API**: Run scans, view status, list tools, and generate reports from the terminal or via the built-in API server.
+- **CLI & REST API**: Run scans, view status, list tools, and generate markdown or HTML reports from the terminal or via the built-in API server.
 
 ---
 
@@ -81,6 +83,11 @@ driln tools list
 ```bash
 driln report 550e8400-e29b-41d4-a716-446655440000
 driln report 550e8400-e29b-41d4-a716-446655440000 --format html
+```
+
+#### Compare a scan against the last one on the same target:
+```bash
+driln intel diff 550e8400-e29b-41d4-a716-446655440000
 ```
 
 #### Start the local API server:

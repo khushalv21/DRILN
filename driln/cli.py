@@ -868,6 +868,62 @@ def intel_tech(
     asyncio.run(_run())
 
 
+@intel_app.command("diff")
+def intel_diff(
+    scan_id: str = typer.Argument(..., help="Scan UUID"),
+) -> None:
+    """Compare a scan against the most recent prior scan of the same target."""
+
+    async def _run() -> None:
+        from driln.core.logging import setup_logging
+        from driln.db.engine import _get_session_factory, init_db
+        from driln.intelligence.diff import compute_scan_diff
+
+        setup_logging()
+        await init_db()
+
+        factory = _get_session_factory()
+        async with factory() as session:
+            diff = await compute_scan_diff(session, scan_id)
+            if diff is None:
+                console.print(f"\n  [bold white]✗[/bold white] Scan [yellow]{scan_id}[/yellow] not found\n")
+                raise typer.Exit(1)
+
+            console.print()
+            console.print(_header("Scan Diff", diff.target))
+
+            if diff.previous_scan_id is None:
+                console.print("  [dim]No prior completed scan for this target — nothing to compare.[/dim]")
+                console.print(f"  [dim]{len(diff.new_findings)} finding(s) in this scan.[/dim]\n")
+                return
+
+            console.print(f"  [dim]Compared against:[/dim] {diff.previous_scan_id}\n")
+
+            def _sev(sev: str) -> str:
+                color = _SEV_COLORS.get(sev, "white")
+                return f"[{color}]{sev.upper()}[/{color}]"
+
+            if diff.new_findings:
+                console.print(f"  [bold red]+ {len(diff.new_findings)} new[/bold red]")
+                for f in diff.new_findings:
+                    where = f"{f.host}:{f.port}" if f.port else (f.host or "")
+                    console.print(f"    [red]+[/red] {_sev(f.severity)}  {f.title}  [dim]{where}[/dim]")
+            else:
+                console.print("  [dim]No new findings.[/dim]")
+
+            if diff.fixed_findings:
+                console.print(f"\n  [bold green]- {len(diff.fixed_findings)} fixed[/bold green]")
+                for f in diff.fixed_findings:
+                    where = f"{f.host}:{f.port}" if f.port else (f.host or "")
+                    console.print(f"    [green]-[/green] {_sev(f.severity)}  {f.title}  [dim]{where}[/dim]")
+            else:
+                console.print("\n  [dim]No fixed findings.[/dim]")
+
+            console.print(f"\n  [dim]{len(diff.persisted_findings)} finding(s) unchanged.[/dim]\n")
+
+    asyncio.run(_run())
+
+
 # ── Setup ────────────────────────────────────────────────────────
 
 

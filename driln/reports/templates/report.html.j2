@@ -78,6 +78,10 @@
     margin: 12px 0;
   }
   .risk-score .num { font-size: 2.2rem; font-weight: 700; }
+  .diff-stats { display: flex; gap: 20px; margin: 12px 0 20px; font-size: 0.92rem; }
+  .diff-stats .new { color: var(--critical); }
+  .diff-stats .fixed { color: var(--low); }
+  .diff-stats .unchanged { color: var(--fg-dim); }
   .finding {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -122,6 +126,44 @@
     <span class="num">{{ risk_summary.score | int }}<span style="font-size:1rem;color:var(--fg-dim)">/100</span></span>
     <span class="badge {{ risk_summary.label }}">{{ risk_summary.label | upper }}</span>
   </div>
+  {% endif %}
+
+  {% if diff and diff.previous_scan_id %}
+  <h2>Changes Since Last Scan</h2>
+  <p class="meta">Compared against scan <code>{{ diff.previous_scan_id }}</code></p>
+  <div class="diff-stats">
+    <span class="new">🆕 {{ diff.new_findings | length }} new</span>
+    <span class="fixed">✅ {{ diff.fixed_findings | length }} fixed</span>
+    <span class="unchanged">➖ {{ diff.persisted_findings | length }} unchanged</span>
+  </div>
+  {% if diff.new_findings %}
+  <table>
+    <thead><tr><th colspan="3">New</th></tr></thead>
+    <tbody>
+    {% for f in diff.new_findings %}
+      <tr>
+        <td>{{ f.title }}</td>
+        <td><span class="badge {{ f.severity }}">{{ f.severity | upper }}</span></td>
+        <td class="where">{{ f.host }}{% if f.port %}:{{ f.port }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if diff.fixed_findings %}
+  <table>
+    <thead><tr><th colspan="3">Fixed</th></tr></thead>
+    <tbody>
+    {% for f in diff.fixed_findings %}
+      <tr>
+        <td>{{ f.title }}</td>
+        <td><span class="badge {{ f.severity }}">{{ f.severity | upper }}</span></td>
+        <td class="where">{{ f.host }}{% if f.port %}:{{ f.port }}{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
   {% endif %}
 
   <h2>What We Found</h2>

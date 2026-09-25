@@ -25,6 +25,29 @@ We scanned your system and found **{{ total_findings }} things** worth knowing a
 * **Metrics:** Severity: {{ "%.2f" | format(risk_summary.base_severity) }} | Exploitability: {{ "%.2f" | format(risk_summary.exploitability) }} | Exposure: {{ "%.2f" | format(risk_summary.exposure) }} | Context Boost: {{ "%.2f" | format(risk_summary.context_boost) }}
 {% endif %}
 
+{% if diff and diff.previous_scan_id %}
+### Changes Since Last Scan
+
+Compared against scan `{{ diff.previous_scan_id }}`.
+
+* 🆕 **{{ diff.new_findings | length }} new**
+* ✅ **{{ diff.fixed_findings | length }} fixed**
+* ➖ **{{ diff.persisted_findings | length }} unchanged**
+
+{% if diff.new_findings %}
+**New:**
+{% for f in diff.new_findings %}
+* {{ f.title }} — {{ f.host }}{% if f.port %}:{{ f.port }}{% endif %} ({{ f.severity }})
+{% endfor %}
+{% endif %}
+{% if diff.fixed_findings %}
+**Fixed:**
+{% for f in diff.fixed_findings %}
+* {{ f.title }} — {{ f.host }}{% if f.port %}:{{ f.port }}{% endif %} ({{ f.severity }})
+{% endfor %}
+{% endif %}
+{% endif %}
+
 {% if total_findings > 0 %}
 ### Findings Summary
 

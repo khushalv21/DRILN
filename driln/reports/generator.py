@@ -112,6 +112,16 @@ class ReportGenerator:
                 sev = str(f["severity"])
                 severity_counts[sev] = severity_counts.get(sev, 0) + 1
 
+            # Scan-to-scan diff (new/fixed/persisted vs. the last completed
+            # scan of the same target)
+            diff = None
+            try:
+                from driln.intelligence.diff import compute_scan_diff
+
+                diff = await compute_scan_diff(session, scan_id)
+            except Exception as exc:
+                logger.warning("report_diff_failed", error=str(exc))
+
             # Intelligence analysis
             intelligence = None
             try:
@@ -201,6 +211,7 @@ class ReportGenerator:
                 if intelligence
                 else [],
                 correlations=intelligence.correlation_groups if intelligence else [],
+                diff=diff,
             )
 
             # Write to disk with human-readable names
