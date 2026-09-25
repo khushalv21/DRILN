@@ -1,0 +1,22 @@
+services:
+  driln:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DRILN_DATABASE_URL: sqlite+aiosqlite:////home/driln/app/data/driln.db
+      DRILN_SCAN_OUTPUT_DIR: /home/driln/app/output
+      # Optional BYOK settings — uncomment and fill in to enable AI summaries.
+      # DRILN_AI_API_KEY: sk-your-key-here
+      # DRILN_AI_PROVIDER: openai
+      # DRILN_AI_MODEL: gpt-4o
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - driln-data:/home/driln/app/data
+      - driln-output:/home/driln/app/output
+
+volumes:
+  driln-data:
+  driln-output:
