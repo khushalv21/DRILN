@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class ReportRequest(BaseModel):
     """Request body for generating a report."""
 
-    format: str = Field("markdown", pattern=r"^(markdown|html)$")
+    format: str = Field("markdown", pattern=r"^markdown$")
     include_ai_summary: bool = True
 
 

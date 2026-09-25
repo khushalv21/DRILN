@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader
 
 from driln.ai.registry import get_ai_provider
 from driln.core.config import get_settings
@@ -37,9 +37,7 @@ class ReportGenerator:
     def __init__(self) -> None:
         self._env = Environment(
             loader=FileSystemLoader(str(_TEMPLATE_DIR)),
-            # Only the HTML template needs escaping; the markdown template's
-            # filename doesn't match the default `.html`/`.htm`/`.xml` set.
-            autoescape=select_autoescape(enabled_extensions=("html.j2",), default_for_string=False),
+            autoescape=False,
             trim_blocks=True,
             lstrip_blocks=True,
         )
@@ -54,14 +52,14 @@ class ReportGenerator:
 
         Args:
             scan_id: UUID of the scan.
-            format: ``"markdown"`` or ``"html"``.
+            format: Must be ``"markdown"``.
             include_ai_summary: Whether to call the AI provider for analysis.
 
         Returns:
             Dict with ``report_id``, ``filepath``, ``content``, ``ai_summary``.
         """
-        if format not in ("markdown", "html"):
-            raise ValueError("format must be 'markdown' or 'html'")
+        if format != "markdown":
+            raise ValueError("Only markdown format is supported")
 
         settings = get_settings()
         factory = _get_session_factory()
@@ -166,8 +164,7 @@ class ReportGenerator:
                     ai_summary = f"_AI analysis unavailable: {exc}_"
 
             # Render template
-            template_name = "report.html.j2" if format == "html" else "markdown.md.j2"
-            template = self._env.get_template(template_name)
+            template = self._env.get_template("markdown.md.j2")
 
             # Compute scan duration
             scan_duration = None
@@ -223,7 +220,7 @@ class ReportGenerator:
                 scan.started_at,
             )
             output_dir.mkdir(parents=True, exist_ok=True)
-            report_name = make_report_filename(scan.target, format)
+            report_name = make_report_filename(scan.target)
             filepath = output_dir / report_name
             filepath.write_text(content, encoding="utf-8")
 

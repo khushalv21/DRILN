@@ -1,13 +1,8 @@
-"""Tests for report template rendering.
+"""Tests for markdown report template rendering.
 
 Exercises the Jinja2 environment directly (rather than the full
 `ReportGenerator.generate()`, which touches the module-level DB session
-factory) to verify:
-  * the markdown template still renders unescaped, as before
-  * the new HTML template renders, is autoescaped (XSS-safe), and the
-    `select_autoescape(enabled_extensions=("html.j2",))` config actually
-    matches the ".html.j2" filename — this is the part most likely to
-    silently regress if the template is ever renamed.
+factory).
 """
 
 from __future__ import annotations
@@ -33,25 +28,35 @@ def _base_context() -> dict:
                 "status": "completed",
                 "exit_code": 0,
                 "duration_seconds": 12.3,
-                "finding_count": 1,
+                "finding_count": 2,
             }
         ],
         "findings": [
             {
                 "id": "f1",
                 "severity": "critical",
-                "title": "<script>alert(1)</script>",
+                "title": "Unauthenticated RCE via Log4Shell",
                 "description": "Unauthenticated RCE",
                 "host": "example.com",
                 "port": 443,
                 "protocol": "tcp",
                 "service": "https",
-            }
+            },
+            {
+                "id": "f2",
+                "severity": "high",
+                "title": "Outdated Apache version",
+                "description": "Version disclosure",
+                "host": "example.com",
+                "port": 443,
+                "protocol": "tcp",
+                "service": "https",
+            },
         ],
-        "severity_counts": {"critical": 1},
+        "severity_counts": {"critical": 1, "high": 1},
         "ai_summary": None,
         "generated_at": datetime(2026, 1, 1, 0, 6, tzinfo=UTC),
-        "total_findings": 1,
+        "total_findings": 2,
         "intelligence": None,
         "tech_profile": SimpleNamespace(
             technologies=[SimpleNamespace(name="nginx", version="1.25", category="webserver", confidence=0.9)]
@@ -70,6 +75,18 @@ def _base_context() -> dict:
     }
 
 
+def _correlation_group():
+    from driln.schemas.intelligence import CorrelationGroup
+
+    return CorrelationGroup(
+        group_id="g1",
+        finding_ids=["f1", "f2"],
+        relationship="attack_chain",
+        summary="Service info + vulnerability on example.com:443",
+        combined_risk=90.0,
+    )
+
+
 def _diff_with_changes():
     from driln.schemas.diff import ScanDiff
     from driln.schemas.findings import FindingOut
@@ -80,7 +97,7 @@ def _diff_with_changes():
         previous_scan_id="00000000-0000-0000-0000-000000000000",
         new_findings=[
             FindingOut(
-                id="f2",
+                id="f3",
                 scan_id="s2",
                 severity="high",
                 title="New exposed port",
@@ -91,7 +108,7 @@ def _diff_with_changes():
         ],
         fixed_findings=[
             FindingOut(
-                id="f3",
+                id="f4",
                 scan_id="s1",
                 severity="medium",
                 title="Old outdated header",
@@ -104,61 +121,93 @@ def _diff_with_changes():
     )
 
 
-def test_markdown_template_renders_unescaped():
+def _render(context: dict) -> str:
     env = ReportGenerator()._env
-    template = env.get_template("markdown.md.j2")
-    content = template.render(**_base_context())
-
-    assert "# Security Scan Report" in content
-    # Markdown output must NOT be HTML-escaped.
-    assert "<script>alert(1)</script>" in content
-    assert "&lt;script&gt;" not in content
+    return env.get_template("markdown.md.j2").render(**context)
 
 
-def test_html_template_renders_and_autoescapes():
-    env = ReportGenerator()._env
-    template = env.get_template("report.html.j2")
-    content = template.render(**_base_context())
-
-    assert "<!DOCTYPE html>" in content
+def test_renders_title_and_metadata():
+    content = _render(_base_context())
+    assert "# 🛡️ Security Scan Report" in content
     assert "example.com" in content
-    # The finding title must be escaped — this is the actual XSS check.
-    assert "<script>alert(1)</script>" not in content
-    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in content
-    # Risk score and severity badge should show up.
-    assert "87" in content
+    assert "11111111-1111-1111-1111-111111111111" in content
+
+
+def test_renders_severity_pie_chart():
+    content = _render(_base_context())
+    assert "```mermaid" in content
+    assert "pie showData title Findings by Severity" in content
+    assert '"Critical" : 1' in content
+    assert '"High" : 1' in content
+
+
+def test_no_pie_chart_when_no_findings():
+    context = _base_context()
+    context["total_findings"] = 0
+    context["findings"] = []
+    context["severity_counts"] = {}
+    content = _render(context)
+    assert "pie showData" not in content
+
+
+def test_renders_risk_gauge():
+    content = _render(_base_context())
+    assert "87/100" in content
+    assert "█" in content
     assert "CRITICAL" in content
 
 
-def test_markdown_template_renders_diff_section():
+def test_renders_correlation_graph():
+    context = _base_context()
+    context["correlations"] = [_correlation_group()]
+    content = _render(context)
+
+    assert "Correlation Graph" in content
+    assert "```mermaid" in content
+    assert "graph LR" in content
+    # Both correlated finding titles should show up as graph node labels.
+    assert "Unauthenticated RCE via Log4Shell" in content
+    assert "Outdated Apache version" in content
+    assert "Attack Chain" in content
+
+
+def test_no_correlation_section_when_empty():
+    content = _render(_base_context())
+    assert "Correlation Graph" not in content
+
+
+def test_renders_diff_section():
     context = _base_context()
     context["diff"] = _diff_with_changes()
-    env = ReportGenerator()._env
-    content = env.get_template("markdown.md.j2").render(**context)
+    content = _render(context)
 
     assert "Changes Since Last Scan" in content
     assert "New exposed port" in content
     assert "Old outdated header" in content
 
 
-def test_html_template_renders_diff_section():
+def test_no_diff_section_when_no_previous_scan():
+    content = _render(_base_context())
+    assert "Changes Since Last Scan" not in content
+
+
+def test_table_of_contents_reflects_present_sections():
     context = _base_context()
+    context["correlations"] = [_correlation_group()]
     context["diff"] = _diff_with_changes()
-    env = ReportGenerator()._env
-    content = env.get_template("report.html.j2").render(**context)
+    content = _render(context)
 
-    assert "Changes Since Last Scan" in content
-    assert "New exposed port" in content
-    assert "Old outdated header" in content
+    assert "[Risk Overview](#-risk-overview)" in content
+    assert "[Changes Since Last Scan](#-changes-since-last-scan)" in content
+    assert "[Findings Summary](#-findings-summary)" in content
+    assert "[Correlation Graph](#-correlation-graph)" in content
+    assert "[Technology Profile](#-technology-profile)" in content
 
 
-def test_templates_render_without_diff_section_when_no_previous_scan():
+def test_no_findings_message():
     context = _base_context()
-    context["diff"] = None
-    env = ReportGenerator()._env
-
-    md = env.get_template("markdown.md.j2").render(**context)
-    html = env.get_template("report.html.j2").render(**context)
-
-    assert "Changes Since Last Scan" not in md
-    assert "Changes Since Last Scan" not in html
+    context["total_findings"] = 0
+    context["findings"] = []
+    context["severity_counts"] = {}
+    content = _render(context)
+    assert "found **no issues**" in content

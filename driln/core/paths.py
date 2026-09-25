@@ -49,18 +49,16 @@ def make_output_dir(base_dir: Path, target: str, timestamp: datetime | None = No
     return base_dir / dirname
 
 
-def make_report_filename(target: str, fmt: str = "markdown") -> str:
-    """Build a human-readable report filename.
+def make_report_filename(target: str) -> str:
+    """Build a human-readable markdown report filename.
 
-    Format: ``{target}_report.{ext}``
+    Format: ``{target}_report.md``
 
     Args:
         target: The scan target.
-        fmt: Report format (``markdown`` or ``html``).
 
     Returns:
         Filename string like ``scanme.nmap.org_report.md``.
     """
     safe_target = sanitize_target(target)
-    ext = "md" if fmt == "markdown" else "html"
-    return f"{safe_target}_report.{ext}"
+    return f"{safe_target}_report.md"

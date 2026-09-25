@@ -1,17 +1,38 @@
-# Security Scan Report
+# 🛡️ Security Scan Report
 
-**What was scanned:** {{ target }}
-**When:** {{ started_at.strftime('%B %d, %Y at %I:%M %p') if started_at else 'N/A' }} UTC
-{% if scan_duration %}
-**Duration:** {{ scan_duration }}
+**Target:** `{{ target }}` &nbsp;·&nbsp; **Scanned:** {{ started_at.strftime('%B %d, %Y at %I:%M %p') if started_at else 'N/A' }} UTC{{ ' &nbsp;·&nbsp; **Duration:** ' + scan_duration if scan_duration else '' }} &nbsp;·&nbsp; **Scan ID:** `{{ scan_id }}`
+
+{% set ai_visible = ai_summary and not ai_summary.startswith("AI analysis not configured") and not ai_summary.startswith("_AI analysis unavailable") and not ai_summary.startswith("_AI analysis skipped") %}
+## Contents
+
+- [Risk Overview](#-risk-overview)
+{% if diff and diff.previous_scan_id %}
+- [Changes Since Last Scan](#-changes-since-last-scan)
 {% endif %}
+{% if total_findings > 0 %}
+- [Findings Summary](#-findings-summary)
+{% endif %}
+{% if correlations %}
+- [Correlation Graph](#-correlation-graph)
+{% endif %}
+{% if tech_profile and tech_profile.technologies %}
+- [Technology Profile](#-technology-profile)
+{% endif %}
+{% if ai_visible %}
+- [AI Analysis](#-ai-analysis)
+{% endif %}
+- [Details](#-details)
+{% if recommendations %}
+- [Recommendations](#-recommendations)
+{% endif %}
+- [Technical Details](#-technical-details)
 
 ---
 
-## What We Found
+## 📊 Risk Overview
 
 {% if total_findings == 0 %}
-We scanned your system and found **no issues**. Everything looks clean.
+We scanned your system and found **no issues**. Everything looks clean. ✅
 {% elif total_findings == 1 %}
 We scanned your system and found **1 thing** worth knowing about.
 {% else %}
@@ -19,37 +40,63 @@ We scanned your system and found **{{ total_findings }} things** worth knowing a
 {% endif %}
 
 {% if risk_summary %}
-### Risk Assessment
+{% set filled = (risk_summary.score / 100 * 24) | round(0, 'floor') | int %}
+**Overall Risk Score: {{ risk_summary.score | int }}/100 — {{ risk_summary.label | upper }}**
 
-* **Overall Score:** **{{ risk_summary.score | int }}/100** ({{ risk_summary.label | upper }})
-* **Metrics:** Severity: {{ "%.2f" | format(risk_summary.base_severity) }} | Exploitability: {{ "%.2f" | format(risk_summary.exploitability) }} | Exposure: {{ "%.2f" | format(risk_summary.exposure) }} | Context Boost: {{ "%.2f" | format(risk_summary.context_boost) }}
+```
+[{{ '█' * filled }}{{ '░' * (24 - filled) }}]  {{ risk_summary.score | int }}/100
+```
+
+| Factor | Weight |
+|---|---|
+| Base Severity | {{ "%.0f" | format(risk_summary.base_severity * 100) }}% |
+| Exploitability | {{ "%.0f" | format(risk_summary.exploitability * 100) }}% |
+| Exposure | {{ "%.0f" | format(risk_summary.exposure * 100) }}% |
+| Context Boost | {{ "%.0f" | format(risk_summary.context_boost * 100) }}% |
+{% endif %}
+
+{% if total_findings > 0 and severity_counts %}
+```mermaid
+pie showData title Findings by Severity
+{% for sev, count in severity_counts.items() %}
+    "{{ sev | capitalize }}" : {{ count }}
+{% endfor %}
+```
 {% endif %}
 
 {% if diff and diff.previous_scan_id %}
-### Changes Since Last Scan
+---
+
+## 🔄 Changes Since Last Scan
 
 Compared against scan `{{ diff.previous_scan_id }}`.
 
-* 🆕 **{{ diff.new_findings | length }} new**
-* ✅ **{{ diff.fixed_findings | length }} fixed**
-* ➖ **{{ diff.persisted_findings | length }} unchanged**
+| | Count |
+|---|---|
+| 🆕 New | **{{ diff.new_findings | length }}** |
+| ✅ Fixed | **{{ diff.fixed_findings | length }}** |
+| ➖ Unchanged | **{{ diff.persisted_findings | length }}** |
 
 {% if diff.new_findings %}
-**New:**
+**New findings:**
 {% for f in diff.new_findings %}
-* {{ f.title }} — {{ f.host }}{% if f.port %}:{{ f.port }}{% endif %} ({{ f.severity }})
+- {{ f.title }} — {{ f.host }}{% if f.port %}:{{ f.port }}{% endif %} ({{ f.severity }})
 {% endfor %}
+
 {% endif %}
 {% if diff.fixed_findings %}
-**Fixed:**
+**Fixed findings:**
 {% for f in diff.fixed_findings %}
-* {{ f.title }} — {{ f.host }}{% if f.port %}:{{ f.port }}{% endif %} ({{ f.severity }})
+- {{ f.title }} — {{ f.host }}{% if f.port %}:{{ f.port }}{% endif %} ({{ f.severity }})
 {% endfor %}
+
 {% endif %}
 {% endif %}
 
 {% if total_findings > 0 %}
-### Findings Summary
+---
+
+## 🔎 Findings Summary
 
 | What | Risk Level | Where |
 |------|-----------|-------|
@@ -72,17 +119,34 @@ Compared against scan `{{ diff.previous_scan_id }}`.
 {% if correlations %}
 ---
 
-## Correlated Findings
+## 🕸️ Correlation Graph
+
+Findings below aren't isolated — these are grouped because they're related (same service,
+part of a likely attack chain, or share underlying technology).
+
+```mermaid
+graph LR
+{% for g in correlations %}
+{% set gi = loop.index %}
+    G{{ gi }}{"{{ g.relationship | replace('_', ' ') | replace('"', "'") | title }}"}
+{% for fid in g.finding_ids %}
+{% set f = (findings | selectattr("id", "equalto", fid) | list | first) %}
+{% if f %}
+    N{{ gi }}_{{ loop.index }}["{{ f.title | replace('"', "'") | replace('\n', ' ') | truncate(36, True) }}"] --> G{{ gi }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+```
 
 {% for g in correlations %}
-* **{{ g.relationship | replace('_', ' ') | capitalize }}**: {{ g.summary }} *({{ g.finding_ids | length }} findings)*
+- **{{ g.relationship | replace('_', ' ') | capitalize }}**: {{ g.summary }} *({{ g.finding_ids | length }} findings)*
 {% endfor %}
 {% endif %}
 
 {% if tech_profile and tech_profile.technologies %}
 ---
 
-## Technology Profile
+## 🧩 Technology Profile
 
 | Technology | Version | Category | Confidence |
 |------------|---------|----------|------------|
@@ -91,17 +155,17 @@ Compared against scan `{{ diff.previous_scan_id }}`.
 {% endfor %}
 {% endif %}
 
-{% if ai_summary and not ai_summary.startswith("AI analysis not configured") and not ai_summary.startswith("_AI analysis unavailable") and not ai_summary.startswith("_AI analysis skipped") %}
+{% if ai_visible %}
 ---
 
-## AI Analysis
+## 🤖 AI Analysis
 
 {{ ai_summary }}
 {% endif %}
 
 ---
 
-## Details
+## 📄 Details
 
 {% for sev in ["critical", "high", "medium", "low", "info"] %}
 {% set sev_findings = findings | selectattr("severity", "equalto", sev) | list %}
@@ -124,10 +188,12 @@ Compared against scan `{{ diff.previous_scan_id }}`.
 
 {% endif %}
 {% if f.host %}
-**Where:** {{ f.host }}{% if f.port %}, port {{ f.port }}{% endif %}
+**Where:** {{ f.host }}{{ ', port ' + f.port|string if f.port else '' }}
+
 {% endif %}
 {% if f.service %}
 **Service:** {{ f.service }}
+
 {% endif %}
 
 ---
@@ -136,7 +202,7 @@ Compared against scan `{{ diff.previous_scan_id }}`.
 {% endfor %}
 
 {% if recommendations %}
-## What We Recommend
+## ✅ Recommendations
 
 {% for rec in recommendations %}
 {{ loop.index }}. **{{ rec.title }}** — {{ rec.rationale }}
@@ -145,7 +211,7 @@ Compared against scan `{{ diff.previous_scan_id }}`.
 ---
 {% endif %}
 
-## Technical Details
+## ⚙️ Technical Details
 
 <details>
 <summary>Click to expand (for security professionals)</summary>
@@ -164,4 +230,4 @@ Compared against scan `{{ diff.previous_scan_id }}`.
 
 ---
 
-*Report generated by Driln*
+*Report generated by Driln · {{ generated_at.strftime('%Y-%m-%d %H:%M UTC') if generated_at else "" }}*

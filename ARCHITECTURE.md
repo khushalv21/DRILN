@@ -24,7 +24,7 @@ Raw output from tools is messy. Once the tools finish running, Driln passes the 
 
 ## 4. Report Generation & AI
 Finally, the processed data is passed to the **Report Generator**.
-If an AI provider (like OpenAI) is configured in your `.env` file, Driln sends the cleaned findings to the AI to generate an executive summary, attack paths, and remediation steps. The final output is rendered into an HTML or Markdown file.
+If an AI provider (like OpenAI) is configured in your `.env` file, Driln sends the cleaned findings to the AI to generate an executive summary, attack paths, and remediation steps. The final output is rendered into a markdown file, with embedded Mermaid diagrams for the risk breakdown and finding correlations.
 
 ---
 

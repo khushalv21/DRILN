@@ -159,7 +159,7 @@ class Report(Base):
     scan_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("scans.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    format: Mapped[str] = mapped_column(String(20), nullable=False)  # "markdown" | "html"
+    format: Mapped[str] = mapped_column(String(20), nullable=False)  # always "markdown"
     filepath: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)

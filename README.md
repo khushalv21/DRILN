@@ -24,7 +24,8 @@
 - **Workflow Expansion**: Detects conditions like an exposed database port or a WordPress install and automatically runs targeted follow-up templates, or surfaces them as recommendations to approve.
 - **Scan Diffing**: Re-scan the same target later and see exactly what's new, what got fixed, and what's unchanged — via `driln intel diff`, the API, or a "Changes Since Last Scan" section in every report.
 - **AI-Powered Summaries (BYOK)**: Bring your own API key — generates executive summaries and remediation steps using LLMs. Works without a key too.
-- **CLI & REST API**: Run scans, view status, list tools, and generate markdown or HTML reports from the terminal or via the built-in API server.
+- **CLI & REST API**: Run scans, view status, list tools, and generate reports from the terminal or via the built-in API server.
+- **Readable Reports**: Markdown reports with embedded Mermaid diagrams (severity breakdown, finding correlation graphs) — render natively on GitHub/GitLab, no HTML viewer needed.
 
 ---
 
@@ -89,10 +90,9 @@ Scan ID: 550e8400-e29b-41d4-a716-446655440000
 driln tools list
 ```
 
-#### Regenerate a report (markdown or HTML):
+#### Regenerate a report:
 ```bash
 driln report 550e8400-e29b-41d4-a716-446655440000
-driln report 550e8400-e29b-41d4-a716-446655440000 --format html
 ```
 
 #### Compare a scan against the last one on the same target:
