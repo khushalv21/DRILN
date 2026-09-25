@@ -1,0 +1,76 @@
+<svg width="900" height="700" viewBox="0 0 900 700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .h1 { font-family: -apple-system,'Segoe UI',sans-serif; font-size: 28px; font-weight: 700; fill: #1f2328; }
+      .h2 { font-family: -apple-system,'Segoe UI',sans-serif; font-size: 18px; font-weight: 700; fill: #1f2328; }
+      .body { font-family: -apple-system,'Segoe UI',sans-serif; font-size: 13.5px; fill: #1f2328; }
+      .dim { font-family: -apple-system,'Segoe UI',sans-serif; font-size: 13px; fill: #59636e; }
+      .code { font-family: 'SF Mono',Consolas,monospace; font-size: 13px; fill: #1f2328; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="700" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="899" height="699" fill="none" stroke="#d1d9e0"/>
+
+  <text x="40" y="56" class="h1">🛡️ Security Scan Report</text>
+  <text x="40" y="86" class="dim">Target: example.com  ·  Scanned: Jan 1, 2026  ·  Risk: 87/100 — CRITICAL</text>
+  <line x1="40" y1="102" x2="860" y2="102" stroke="#d1d9e0"/>
+
+  <text x="40" y="136" class="h2">📊 Risk Overview</text>
+  <rect x="40" y="150" width="420" height="30" rx="4" fill="#f6f8fa"/>
+  <text x="52" y="170" class="code">[█████████████████████░░░]  87/100</text>
+
+  <text x="40" y="222" class="h2">Findings by Severity</text>
+  <g transform="translate(150,320)">
+    <path d="M0,0 L0,-60 A60,60 0 0 1 52,-30 Z" fill="#ECECFF" stroke="#1f2328"/>
+    <path d="M0,0 L52,-30 A60,60 0 0 1 0,60 Z" fill="#ffe4c4" stroke="#1f2328"/>
+    <path d="M0,0 L0,60 A60,60 0 0 1 0,-60 Z" fill="#c9f7d4" stroke="#1f2328"/>
+    <text x="-70" y="-75" class="dim" text-anchor="middle">Critical</text>
+    <text x="85" y="0" class="dim" text-anchor="middle">High</text>
+    <text x="-70" y="98" class="dim" text-anchor="middle">Medium</text>
+  </g>
+
+  <text x="360" y="222" class="h2">🕸️ Correlation Graph</text>
+  <g class="body" font-size="12.5">
+    <rect x="360" y="260" width="165" height="34" rx="6" fill="#ECECFF" stroke="#333"/>
+    <text x="442" y="281" text-anchor="middle">Exposed Redis :6379</text>
+
+    <rect x="360" y="320" width="165" height="34" rx="6" fill="#ECECFF" stroke="#333"/>
+    <text x="442" y="341" text-anchor="middle">Weak auth on :6379</text>
+
+    <path d="M525,277 L613,297" stroke="#333" fill="none" marker-end="url(#arrow)"/>
+    <path d="M525,337 L613,307" stroke="#333" fill="none" marker-end="url(#arrow)"/>
+    <polygon points="613,272 668,300 613,328 558,300" fill="#ffe4c4" stroke="#333"/>
+    <text x="613" y="304" text-anchor="middle" font-size="11.5">attack chain</text>
+  </g>
+
+  <line x1="40" y1="460" x2="860" y2="460" stroke="#d1d9e0"/>
+  <text x="40" y="494" class="h2">🔎 Findings Summary</text>
+
+  <g class="body">
+    <text x="52" y="528" font-weight="700">What</text>
+    <text x="480" y="528" font-weight="700">Risk</text>
+    <text x="620" y="528" font-weight="700">Where</text>
+    <line x1="40" y1="538" x2="860" y2="538" stroke="#d1d9e0"/>
+
+    <text x="52" y="562">Exposed Redis instance, no auth required</text>
+    <circle cx="486" cy="558" r="5" fill="#e24b4a"/><text x="498" y="562">Critical</text>
+    <text x="620" y="562" class="dim">10.0.4.12:6379</text>
+    <line x1="40" y1="574" x2="860" y2="574" stroke="#eef0f2"/>
+
+    <text x="52" y="598">Outdated Apache — version disclosure</text>
+    <circle cx="486" cy="594" r="5" fill="#ff9d52"/><text x="498" y="598">High</text>
+    <text x="620" y="598" class="dim">10.0.4.12:80</text>
+    <line x1="40" y1="610" x2="860" y2="610" stroke="#eef0f2"/>
+
+    <text x="52" y="634">Missing security headers</text>
+    <circle cx="486" cy="630" r="5" fill="#e0b23c"/><text x="498" y="634">Medium</text>
+    <text x="620" y="634" class="dim">10.0.4.12:443</text>
+    <line x1="40" y1="646" x2="860" y2="646" stroke="#d1d9e0"/>
+  </g>
+
+  <text x="40" y="680" class="dim">✅ Fully rendered on GitHub / GitLab — no HTML viewer needed.</text>
+</svg>

@@ -1,19 +1,33 @@
-```
-    ██████╗ ██████╗ ██╗██╗     ███╗   ██╗
-    ██╔══██╗██╔══██╗██║██║     ████╗  ██║
-    ██║  ██║██████╔╝██║██║     ██╔██╗ ██║
-    ██║  ██║██╔══██╗██║██║     ██║╚██╗██║
-    ██████╔╝██║  ██║██║███████╗██║ ╚████║
-    ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═══╝
-```
-> **Find it before they do.**
+<div align="center">
+
+<img src="docs/assets/banner.svg" alt="Driln — find it before they do" width="100%">
 
 [![CI](https://github.com/khushalv21/DRILN/actions/workflows/ci.yml/badge.svg)](https://github.com/khushalv21/DRILN/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](driln/__init__.py)
 
-**Driln** is a lightweight, automated penetration testing engine. It orchestrates industry-standard offensive security tools, deduplicates findings, scores risks, correlates results via scan intelligence, and generates clean markdown reports.
+</div>
+
+**Driln** is a lightweight, automated penetration testing engine. Point it at a target, and it
+chains industry-standard offensive security tools, deduplicates and correlates the findings,
+scores risk, and hands you back a report that's actually pleasant to read — no dashboard
+required, just a markdown file with real charts embedded in it. 🌈
+
+---
+
+## 👀 See it in action
+
+<p align="center"><img src="docs/assets/terminal-scan.svg" alt="driln scan and driln report running in a terminal" width="100%"></p>
+
+That's a real run against `scanme.nmap.org` (nmap.org's public test target) — the CLI's own
+output above, not a mockup.
+
+<p align="center"><img src="docs/assets/report-preview.svg" alt="A driln markdown report rendered on GitHub, with a Mermaid pie chart and correlation graph" width="100%"></p>
+
+*Example report output — every element here (the risk gauge, the severity pie chart, the
+correlation graph) is a real Mermaid diagram rendered straight out of the markdown file, not
+a screenshot of a web UI. There isn't one.*
 
 ---
 
