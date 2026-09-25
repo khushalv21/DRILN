@@ -32,17 +32,30 @@ The test suite is divided into several areas, primarily focusing on security and
 
 If all tests pass, the system will output a green success message, indicating Driln is stable and ready to use.
 
-## 🚀 Stress Testing
+## Concurrency Benchmark
 
-Driln's core engine was subjected to extreme pressure testing to ensure it can handle massive concurrency and database load. 
+[`scripts/benchmark_concurrency.py`](scripts/benchmark_concurrency.py) stress-tests the async
+engine and SQLite session factory under concurrent load. It registers a fake tool that returns
+synthetic findings instantly (no real network tools involved — this measures the engine, not
+subfinder/nuclei), then fires many scans at `ScanEngine` simultaneously via `asyncio.gather` into
+an isolated temp SQLite database.
 
-During our internal benchmarking, we built a script that mocks the external network tools to instantly return synthetic vulnerabilities, firing **500 concurrent scans** at the `ScanEngine` simultaneously.
+Run it yourself:
 
-### What the Benchmark Tested
+```bash
+PYTHONPATH=. python scripts/benchmark_concurrency.py --scans 500 --findings-per-scan 10
+```
 
-- Flooding the `ScanEngine` with 500 concurrent requests using `asyncio.gather`.
-- Pushing **5,000 simulated findings** into the SQLite database at exactly the same time.
-- Validating the strength of `aiosqlite`'s transaction management (preventing "database is locked" errors).
-- Passing the massive concurrent load through the `IntelligenceService` for deduplication and risk scoring.
+Sample output from this repo's dev machine (Apple Silicon, Python 3.12, three consecutive runs):
 
-**Benchmark Result:** Driln successfully processed this entire 500-scan payload flawlessly in less than **4 seconds** on standard hardware, with a 100% success rate.
+```
+Scans requested:      500
+Scans completed:      500/500
+Exceptions raised:    0
+Findings persisted:   5000 (expected 5000)
+Wall clock time:      2.2s – 2.4s
+Success rate:         100.0%
+```
+
+Results are hardware- and Python-version-dependent — re-run the script rather than trusting these
+numbers on a different machine.

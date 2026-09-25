@@ -485,12 +485,16 @@ async def _tools_check() -> None:
 def report(
     scan_id: str = typer.Argument(..., help="Scan ID to generate report for"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI summary"),
+    format: str = typer.Option("markdown", "--format", "-f", help="Report format: markdown or html"),
 ) -> None:
     """Generate a report for a completed scan."""
-    asyncio.run(_generate_report(scan_id, no_ai))
+    if format not in ("markdown", "html"):
+        console.print("  [bold white]Error:[/bold white] --format must be 'markdown' or 'html'")
+        raise typer.Exit(1)
+    asyncio.run(_generate_report(scan_id, no_ai, format))
 
 
-async def _generate_report(scan_id: str, no_ai: bool) -> None:
+async def _generate_report(scan_id: str, no_ai: bool, format: str = "markdown") -> None:
     import logging
 
     from driln.core.logging import setup_logging
@@ -512,7 +516,7 @@ async def _generate_report(scan_id: str, no_ai: bool) -> None:
         generator = ReportGenerator()
         result = await generator.generate(
             scan_id=scan_id,
-            format="markdown",
+            format=format,
             include_ai_summary=not no_ai,
         )
         progress.update(task, description="[green]Done[/green]")

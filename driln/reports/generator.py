@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from driln.ai.registry import get_ai_provider
 from driln.core.config import get_settings
@@ -37,7 +37,9 @@ class ReportGenerator:
     def __init__(self) -> None:
         self._env = Environment(
             loader=FileSystemLoader(str(_TEMPLATE_DIR)),
-            autoescape=False,
+            # Only the HTML template needs escaping; the markdown template's
+            # filename doesn't match the default `.html`/`.htm`/`.xml` set.
+            autoescape=select_autoescape(enabled_extensions=("html.j2",), default_for_string=False),
             trim_blocks=True,
             lstrip_blocks=True,
         )
@@ -52,14 +54,14 @@ class ReportGenerator:
 
         Args:
             scan_id: UUID of the scan.
-            format: Must be ``"markdown"``.
+            format: ``"markdown"`` or ``"html"``.
             include_ai_summary: Whether to call the AI provider for analysis.
 
         Returns:
             Dict with ``report_id``, ``filepath``, ``content``, ``ai_summary``.
         """
-        if format != "markdown":
-            raise ValueError("Only markdown format is supported")
+        if format not in ("markdown", "html"):
+            raise ValueError("format must be 'markdown' or 'html'")
 
         settings = get_settings()
         factory = _get_session_factory()
@@ -154,7 +156,7 @@ class ReportGenerator:
                     ai_summary = f"_AI analysis unavailable: {exc}_"
 
             # Render template
-            template_name = "markdown.md.j2"
+            template_name = "report.html.j2" if format == "html" else "markdown.md.j2"
             template = self._env.get_template(template_name)
 
             # Compute scan duration

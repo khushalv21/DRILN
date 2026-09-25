@@ -77,9 +77,10 @@ Scan ID: 550e8400-e29b-41d4-a716-446655440000
 driln tools list
 ```
 
-#### Regenerate a markdown report:
+#### Regenerate a report (markdown or HTML):
 ```bash
 driln report 550e8400-e29b-41d4-a716-446655440000
+driln report 550e8400-e29b-41d4-a716-446655440000 --format html
 ```
 
 #### Start the local API server:
