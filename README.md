@@ -17,6 +17,15 @@
 
 ---
 
+## See it in action
+
+<p align="center"><img src="docs/assets/terminal-scan.svg" alt="driln scan and driln report running in a terminal" width="100%"></p>
+
+That's a real run against `scanme.nmap.org` (nmap.org's public test target) — the CLI's own
+output above, not a mockup.
+
+---
+
 ## Features
 
 - **Automated Tool Chaining**: Seamlessly pipes outputs from `subfinder` to `httpx` to `nmap` and `nuclei`.
